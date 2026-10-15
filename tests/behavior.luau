@@ -1,0 +1,128 @@
+local newWorld=require('./mock_roblox')
+return function(source)
+    local count=0
+    local function test(name,fn)
+        fn();count+=1;print('PASS '..name)
+    end
+    local function launch(width,height)
+        local w=newWorld(); w.viewport={X=width or 1280,Y=height or 720}
+        local gui=w.run(source);assert(gui and gui.Name=='ReyznX');return w,gui
+    end
+    local function find(gui,name) return assert(gui:FindFirstChild(name,true),'missing '..name)end
+    local function click(gui,name) find(gui,name).Activated:Fire()end
+    local function within(w,gui)
+        local window=find(gui,'Window');local p,s=window.AbsolutePosition,window.AbsoluteSize
+        assert(p.X>=-1 and p.Y>=-1 and p.X+s.X<=w.viewport.X+1 and p.Y+s.Y<=w.viewport.Y+1,'window outside viewport')
+        assert(find(gui,'Content').AbsoluteSize.X>160,'content too narrow')
+    end
+    test('reference exclusions, native GUI and account identity',function()
+        local w,gui=launch()
+        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Theme')=='Amethyst')
+        assert(find(gui,'SessionTime').Text=='00:00:00')
+        assert(find(gui,'UserID').Text=='ID  123')
+        assert(w.thumbnailRequest.id==123 and w.thumbnailRequest.kind.Name=='HeadShot')
+        assert(find(gui,'Avatar').Image=='rbxthumb://test-avatar')
+        local banned={'Ghislain','Key System','Featured Scripts','Links','Combat','World','Universal','Player','Play • Exploit • Dominate','Built for Gamers','POWERED BY PERFORMANCE'}
+        local images=0
+        for _,o in ipairs(gui:GetDescendants())do
+            for _,text in ipairs(banned)do assert(not (o.Text or ''):find(text,1,true),'forbidden copy '..text)end
+            if o:IsA('ImageLabel')then images+=1;assert(o.Name=='Avatar')end
+            assert(o.ClassName~='VideoFrame' and o.ClassName~='Sound' and o.ClassName~='CanvasGroup')
+        end
+        assert(images==1 and #w.requests==0)
+        w.step(30);within(w,gui)
+        assert(find(gui,'Window').BackgroundTransparency==0)
+        assert(find(gui,'Credit').Text=='Made By Reyzn')
+        gui:Destroy()
+    end)
+    test('navigation and empty feature pages',function()
+        local w,gui=launch();w.step(30)
+        for _,name in ipairs({'Main','Visuals','Scripts','Settings','Home'})do
+            click(gui,'Tab_'..name);assert(gui:GetAttribute('Page')==name)
+            for _,other in ipairs({'Home','Main','Visuals','Scripts','Settings'})do assert(find(gui,'Page_'..other).Visible==(name==other))end
+        end
+        click(gui,'OpenMain');assert(gui:GetAttribute('Page')=='Main')
+        click(gui,'Tab_Home');click(gui,'Shortcut_Visuals');assert(gui:GetAttribute('Page')=='Visuals')
+        for _,name in ipairs({'Main','Scripts'})do
+            for _,o in ipairs(find(gui,'Page_'..name):GetDescendants())do assert(not o:IsA('TextButton'))end
+        end
+        gui:Destroy()
+    end)
+    test('clock ticks, catches up and survives minimize and respawn',function()
+        local w,gui=launch();w.step(61);assert(find(gui,'SessionTime').Text=='00:00:01')
+        click(gui,'Minimize');w.step(30);assert(gui:GetAttribute('Minimized') and not find(gui,'Window').Visible)
+        w.time=65;w.step(1);assert(find(gui,'SessionTime').Text=='00:01:05')
+        w.character();assert(gui.Parent==w.pg)
+        click(gui,'Launcher');w.step(30);assert(find(gui,'Window').Visible and not find(gui,'Launcher').Visible)
+        assert(find(gui,'Window').BackgroundTransparency==0,'restore opacity')
+        w.time=3601;w.step(1);assert(find(gui,'SessionTime').Text=='01:00:01')
+        gui:Destroy()
+    end)
+    test('theme, glow, motion and size controls',function()
+        local w,gui=launch();w.step(30);click(gui,'Tab_Visuals')
+        click(gui,'Theme_Ember');assert(gui:GetAttribute('Theme')=='Ember')
+        assert(find(gui,'Theme_Ember'):GetAttribute('Selected') and not find(gui,'Theme_Amethyst'):GetAttribute('Selected'))
+        click(gui,'AmbientGlow');assert(not find(gui,'OuterGlow').Visible)
+        click(gui,'Motion');assert(not find(gui,'Motion'):GetAttribute('Enabled'))
+        local x=find(gui,'AmethystPrism').Position.Y.Offset;w.step(90)
+        assert(find(gui,'AmethystPrism').Position.Y.Offset==x)
+        assert(gui:GetAttribute('ElapsedSeconds')>=1,'motion toggle stopped timer')
+        click(gui,'Minimize');assert(not find(gui,'Window').Visible)
+        click(gui,'Launcher');assert(find(gui,'Window').Visible and find(gui,'Window').BackgroundTransparency==0)
+        click(gui,'Tab_Settings');click(gui,'Size_Large');within(w,gui)
+        click(gui,'Size_Compact');within(w,gui)
+        click(gui,'Recenter');within(w,gui)
+        click(gui,'Close');w.step(1);assert(gui.Parent==nil)
+    end)
+    test('desktop and mobile reflow; safe controls',function()
+        for _,size in ipairs({{1536,864},{1280,720},{844,354},{390,780},{320,568},{568,280}})do
+            local w,gui=launch(size[1],size[2]);w.step(30);within(w,gui)
+            local win=find(gui,'Window');local header=find(gui,'Header')
+            local title=header:FindFirstChild('Brand');local controls=find(gui,'WindowControls')
+            assert(title.AbsolutePosition.X+title.AbsoluteSize.X<=controls.AbsolutePosition.X+1,'title overlaps controls at '..size[1])
+            click(gui,'Maximize');within(w,gui);click(gui,'Maximize');within(w,gui)
+            click(gui,'Tab_Settings');click(gui,'Size_Large');within(w,gui)
+            assert(title.AbsolutePosition.X+title.AbsoluteSize.X<=controls.AbsolutePosition.X+1,'large title overlaps controls at '..size[1])
+            w.viewport={X=size[2],Y=size[1]};find(gui,'SafeArea'):GetPropertyChangedSignal('AbsoluteSize'):Fire();within(w,gui)
+            assert(find(gui,'Page_Home').CanvasSize.Y.Offset>=484)
+            gui:Destroy()
+        end
+    end)
+    test('drag clamps, handles touch ownership and launcher drag',function()
+        local w,gui=launch(1280,800);w.step(30)
+        local e=w.env;local input={UserInputType=e.Enum.UserInputType.MouseButton1,Position=e.Vector3.new(100,100)}
+        find(gui,'DragArea').InputBegan:Fire(input)
+        w.services.UserInputService.InputChanged:Fire({UserInputType=e.Enum.UserInputType.MouseMovement,Position=e.Vector3.new(9999,9999)})
+        within(w,gui);w.services.UserInputService.InputEnded:Fire(input)
+        click(gui,'Minimize');w.step(30)
+        local touch={UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(20,20)}
+        local launcher=find(gui,'Launcher');launcher.InputBegan:Fire(touch)
+        local oldX=launcher.Position.X.Offset
+        w.services.UserInputService.InputChanged:Fire({UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(500,300)})
+        assert(launcher.Position.X.Offset==oldX,'unrelated touch moved launcher')
+        touch.Position=e.Vector3.new(200,200);w.services.UserInputService.InputChanged:Fire(touch)
+        w.services.UserInputService.InputEnded:Fire(touch);click(gui,'Launcher');assert(gui:GetAttribute('Minimized'),'drag restored window')
+        launcher.InputBegan:Fire({UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(200,200)})
+        click(gui,'Launcher');w.step(30);assert(not gui:GetAttribute('Minimized'))
+        gui:Destroy()
+    end)
+    test('one interface and timer after reexecution; all handlers cleaned on close',function()
+        local w,gui=launch();w.step(90)
+        assert(w.services.RunService.Heartbeat:Count()==1)
+        local again=w.run(source);assert(gui.Parent==nil);assert(again:GetAttribute('ElapsedSeconds')==0)
+        assert(w.services.RunService.Heartbeat:Count()==1)
+        local n=0;for _,o in ipairs(w.pg:GetChildren())do if o.Name=='ReyznX'then n+=1 end end;assert(n==1)
+        w.step(30);click(again,'Close');w.step(40);assert(again.Parent==nil)
+        assert(w.services.RunService.Heartbeat:Count()==0)
+        for _,key in ipairs({'InputBegan','InputChanged','InputEnded','WindowFocusReleased'})do assert(w.services.UserInputService[key]:Count()==0,key..' leaked')end
+        assert(#w.requests==0)
+    end)
+    test('thumbnail failures and delayed thumbnail after close',function()
+        local w=newWorld();w.thumbnailFailure=true;local gui=w.run(source);w.step(90)
+        assert(find(gui,'AvatarFallback').Visible and gui:GetAttribute('ElapsedSeconds')>=1)
+        click(gui,'Close');w.step(40);assert(gui.Parent==nil)
+        local slow=newWorld();slow.thumbnailDelay=5;local delayed=slow.run(source);slow.step(30)
+        click(delayed,'Close');slow.step(360);assert(delayed.Parent==nil and slow.services.RunService.Heartbeat:Count()==0)
+    end)
+    print(tostring(count)..' scenarios passed. Native rendering still requires Roblox.')
+end

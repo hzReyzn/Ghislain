@@ -1,11 +1,22 @@
-# Ghislain
+# Reyzn X
 
-Base de interfaz de HzReyzn Hub para comenzar de nuevo.
+Made By Reyzn.
 
-`HzReyzn Hub.lua` abre directamente el GUI. Conserva el diseño, el logo, el fondo de Halloween, los temas, las animaciones, el arrastre de la ventana y los controles para minimizar, restaurar y cerrar. Las secciones de funciones comienzan vacías; Settings conserva únicamente la configuración visual.
+GUI de Roblox creado desde cero en la copia de trabajo `hzReyzn/Ghislain`, inspirado en la referencia negra y violeta. `Reyzn X.lua` contiene toda la interfaz y se ejecuta en el cliente.
 
-Se retiraron las funciones de juego, los scripts propios y afiliados, los ejecutores de código externo, las herramientas de servidor, el contador FPS, el aviso de mantenimiento y la introducción de video/audio.
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"))()
+```
 
-Los dos archivos de `assets/halloween/` son las imágenes originales del logo y del fondo. Son los únicos recursos que descarga el script mediante HTTP; se alojan en este repositorio y no contienen código ejecutable.
+- Home, Main, Visuals, Scripts y Settings. Main y Scripts comienzan vacíos.
+- Avatar circular del jugador, UserId y tiempo de sesión `HH:MM:SS`, desde cero en cada ejecución. El contador continúa al minimizar y al reaparecer.
+- Acento Amethyst por defecto; Moonstone y Ember opcionales en Visuals. Halo y animaciones configurables.
+- Arrastre con ratón o toque, minimizar/restaurar, ampliar, cerrar y ajuste al área segura. `RightShift` también minimiza/restaura.
+- Ventana, iconos, corona y arte abstracto construidos con objetos nativos. La única imagen es el avatar obtenido mediante Roblox.
+- Sin personajes decorativos, Key System, Featured Scripts, Links, Combat, World, Universal ni Player. Sin pantallas de mantenimiento/carga, audio, funciones de juego ni ejecución de scripts externos.
 
-La copia original en `hzReyzn/scriptshz` se conserva. Este repositorio es la base de trabajo para los próximos cambios.
+`hzReyzn/scriptshz` conserva la versión anterior. Este repositorio es el espacio de trabajo para Reyzn X.
+
+## Verificación
+
+`python tests/run.py /ruta/a/luau` compila y prueba la interfaz en un entorno de Roblox simulado: navegación, avatar, contador, cambios visuales, adaptación de tamaño, arrastre, minimizar, cierre, reejecución y limpieza. Estas pruebas no sustituyen la comprobación visual en Roblox.
