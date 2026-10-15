@@ -1,6 +1,6 @@
 -- Small deterministic client harness. It checks controller behavior, not Roblox physics/rendering.
 local function newWorld()
-    local W={time=0,tasks={},warnings={},objects={},requests={},viewport={X=1280,Y=720},rejectVideoCanvas=true}
+    local W={time=0,tasks={},tweens={},warnings={},objects={},requests={},viewport={X=1280,Y=720},rejectVideoCanvas=true}
     local env=setmetatable({}, {__index=getfenv()})
     local function signal()
         local s={links={}}
@@ -186,9 +186,13 @@ local function newWorld()
     local services={}
     services.RunService={PreSimulation=signal(),PostSimulation=signal(),Heartbeat=signal(),RenderStepped=signal()}
     services.TweenService={Create=function(_,object,info,props)
-        local t={Completed=signal(),cancelled=false}
+        local t={Completed=signal(),cancelled=false,object=object,props=props,duration=info[1] or .1,start={}}
         function t:Cancel()self.cancelled=true end
-        function t:Play()env.task.delay(info[1] or .1,function()if not t.cancelled and not object._destroying then for k,v in pairs(props)do object[k]=v end;t.Completed:Fire()end end)end
+        function t:Play()
+            self.began=W.time
+            for k in pairs(props)do self.start[k]=object[k]end
+            W.tweens[#W.tweens+1]=self
+        end
         return t
     end,GetValue=function(_,x)return x end}
     services.UserInputService=env.Instance.new('UserInputService');services.UserInputService.TouchEnabled=true
@@ -233,6 +237,24 @@ local function newWorld()
     function W.step(count)
         for _=1,(count or 1)do
             W.time+=1/60
+            local active={}
+            for _,t in ipairs(W.tweens)do
+                if not t.cancelled and not t.object._destroying then
+                    local alpha=math.clamp((W.time-t.began)/t.duration,0,1)
+                    for k,b in pairs(t.props)do
+                        local a=t.start[k]
+                        if alpha>=1 then t.object[k]=b
+                        elseif type(a)=='number' then t.object[k]=a+(b-a)*alpha
+                        elseif type(a)=='table' and a.R then t.object[k]=a:Lerp(b,alpha)
+                        elseif type(a)=='table' and type(a.X)=='table' then
+                            t.object[k]=env.UDim2.new(a.X.Scale+(b.X.Scale-a.X.Scale)*alpha,a.X.Offset+(b.X.Offset-a.X.Offset)*alpha,
+                                a.Y.Scale+(b.Y.Scale-a.Y.Scale)*alpha,a.Y.Offset+(b.Y.Offset-a.Y.Offset)*alpha)
+                        elseif type(a)=='table' and type(a.X)=='number'then t.object[k]=a:Lerp(b,alpha)end
+                    end
+                    if alpha<1 then active[#active+1]=t else t.Completed:Fire()end
+                end
+            end
+            W.tweens=active
             for _,object in ipairs(W.objects) do
                 if (object.ClassName=='ImageLabel' or object.ClassName=='ImageButton') and object.Image~='' and not object.IsLoaded
                     and not W.localStatusFalse and renderable(object,false) then object.IsLoaded=true end
