@@ -250,9 +250,10 @@ local function newWorld()
         return object:IsDescendantOf(pg)
     end
     function W.run(src,...)local fn,err=env.loadstring(src);assert(fn,err);local result;W.spawn(function(...)result=fn(...)end,...);return result end
-    function W.step(count)
+    function W.step(count,frameDt)
+        local dt=frameDt or 1/60
         for _=1,(count or 1)do
-            W.time+=1/60
+            W.time+=dt
             local active={}
             for _,t in ipairs(W.tweens)do
                 if not t.cancelled and not t.object._destroying then
@@ -285,7 +286,7 @@ local function newWorld()
                     if object.TimePosition>=object.TimeLength then object.Playing=false;object.IsPlaying=false;object.Ended:Fire() end
                 end
             end
-            for _,key in ipairs({'PreSimulation','PostSimulation','Heartbeat','RenderStepped'})do services.RunService[key]:Fire(1/60)end
+            for _,key in ipairs({'PreSimulation','PostSimulation','Heartbeat','RenderStepped'})do services.RunService[key]:Fire(dt)end
             local pending=W.tasks;W.tasks={}
             for _,t in ipairs(pending)do if t.at<=W.time then W.resume(t.co,table.unpack(t.args))else W.tasks[#W.tasks+1]=t end end
         end

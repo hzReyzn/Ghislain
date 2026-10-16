@@ -1,29 +1,57 @@
-# Reyzn X
+# Reyzn X | Amethyst Edition
 
 Made By Reyzn.
 
-GUI de Roblox en la copia de trabajo `hzReyzn/Ghislain`. La versión 2.1 toma la referencia minimalista negra, plateada y violeta: superficies metálicas, bordes nítidos y reflejos suaves. No incluye funciones de juego.
+La versión 2.2 mejora los acabados del GUI existente en `hzReyzn/Ghislain`. Conserva su distribución, sus secciones, los logos R y X, los tres controles PNG y sus funciones. No incluye funciones de juego.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua?revision=reyzn-x-2.1"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua?revision=reyzn-x-2.2"))()
 ```
 
-- Barra lateral con Home, Main, Visuals, Scripts y Settings. Elegir una opción despliega **solamente su panel hacia la derecha**. Pulsar la misma opción o la flecha de plegado deja únicamente la barra lateral.
-- Main, Visuals, Scripts y Settings quedan vacíos para el trabajo posterior. Se eliminaron Themes, los ajustes de tamaño y los textos de relleno.
-- Fuente Builder Sans Medium en las opciones Main, Visuals, Scripts y Settings, sus accesos y sus títulos. Home conserva su fuente anterior.
-- Los dos textos de marca «Reyzn X» ahora usan el PNG de texto metálico suministrado. «Made By Reyzn» se mantiene como texto. La X de la portada y la R minimizada conservan sus imágenes originales. Todos los PNG se guardan sin cambios en `assets/reyzn-x/`.
-- Los tres controles usan los PNG suministrados: línea → minimizar, flecha → plegar/desplegar el panel, X → cerrar. La zona pulsable permanece fija mientras la imagen anima el brillo y la presión. Se descartan únicamente los márgenes transparentes al mostrarlos mediante `ImageRectOffset`/`ImageRectSize`; no se modifican los archivos.
-- Aura exterior inspirada en Ultra Instinto: halo plateado, luz blanca con reflejos fríos/violetas y 44 pequeñas estelas reutilizables en total. Rodea el menú, el panel visible y el logo minimizado; se sincroniza con el plegado y los desvanecimientos. Sus elementos no capturan clics y el aura del panel queda fuera del contenedor de recorte.
-- Avatar circular real, UserId y contador `HH:MM:SS`, desde cero por ejecución; el tiempo continúa mientras está plegado o minimizado y después de reaparecer.
-- Arrastre con ratón o toque desde la parte superior de la barra lateral o del panel. El botón R minimizado también se arrastra. **El arrastre permite salir de la pantalla** y no se limita al rectángulo del dispositivo.
-- Si la interfaz queda completamente fuera, aparece una pequeña R en el borde izquierdo para recuperarla. `RightShift` también minimiza/restaura o recupera una interfaz fuera de pantalla.
-- Controles: línea para minimizar a la R, flecha para plegar/desplegar el panel y cruz para cerrar. No hay maximizar ni ajustes manuales de tamaño; la distribución se adapta automáticamente al dispositivo.
-- Desvanecimientos de minimizar, restaurar y cerrar con brillo breve y escala sutil. Una nueva acción sustituye a la transición anterior sin acumular transparencia ni mover la ventana. El cierre es definitivo para esa ejecución.
-- Página Home con desplazamiento vertical cuando falta altura. Deslizar el contenido no arrastra la ventana. Los eventos distinguen el dedo que inició el arrastre.
+## Cambios visuales
 
-Los PNG se descargan una sola vez desde seis URL fijas de este repositorio y se reutilizan desde caché, validando tamaño, cabecera y final PNG. Necesitan `getcustomasset` (o `getsynasset`) y `writefile` en el entorno de ejecución; `readfile` e `isfile` permiten reutilizar la caché. No son IDs de imágenes subidas a Roblox. Si el entorno no admite estos recursos, se muestran textos e iconos nativos de respaldo y el GUI sigue respondiendo. No se ejecuta ningún contenido descargado por el GUI.
+- **Nombre nativo y legible.** «Reyzn X» vuelve a ser texto: lettering Grenze Gotisch para Reyzn, una X recta en Gotham Bold, degradado cromado y contorno oscuro fino. El PNG del nombre ya no se descarga ni se muestra; el archivo original se conserva. «Made By Reyzn» permanece intacto.
+- **Fuego exterior.** Sustituye los seis aros rectangulares por una textura transparente de fuego en capas, con variaciones de altura, desplazamiento, color y transparencia. Una base tenue conecta las llamas locales. La paleta combina amatista, rosa suave, azul frío y plata. El efecto rodea el menú, el panel desplegado y el logo minimizado, sin recortarse en la ventana de contenido.
+- **Partículas reutilizables.** Fragmentos cristalinos y pequeños destellos plateados aparecen fuera de las superficies, con velocidades y duraciones diferentes. Se desvanecen y reutilizan los mismos objetos. No capturan entradas ni se dibujan encima de los textos y botones.
+- **Metal y profundidad.** Sombras de contacto, carbón degradado, bordes finos, reflejos diagonales alternados y energía que recorre las esquinas redondeadas. Solo un reflejo diagonal se activa a la vez; el resto conserva su contraste.
+- **Respuesta al pulsar.** Los botones comprimen ligeramente su superficie y elevan la luz antes de recuperar su escala. La zona táctil conserva su tamaño y posición. La selección cambia de forma progresiva; un segundo dedo no libera la pulsación del primero.
+- **Transiciones conservadas y coordinadas.** Apertura progresiva, despliegue lateral, cambio de página, minimizar, restaurar y cierre. Las animaciones nuevas cancelan las anteriores y las transparencias se calculan desde valores base, sin pérdida acumulativa de nitidez.
 
-El hub original `hzReyzn/scriptshz` permanece intacto. No se incorporaron scripts afiliados, pantallas de mantenimiento o carga, vídeos ni audio.
+## Calidad visual
+
+En **Settings → Visual quality** puedes elegir **Low, Medium o High**. Android y los dispositivos táctiles empiezan en Medium; los demás, en High. La elección es el máximo permitido: el sistema reduce efectos tras una caída sostenida del rendimiento y los recupera más lentamente cuando mejora. No altera posiciones, dimensiones, contenido ni controles.
+
+| Calidad | Llamas locales activas* | Partículas activas* | Actualizaciones VFX máximas | Halo secundario / reflejos |
+|---|---:|---:|---:|---|
+| Low | 26 | 5 | 15/s | Desactivados |
+| Medium | 30 | 14 | 30/s | Activados |
+| High | 52 | 26 | 30/s | Activados |
+
+\* Suma de los tres grupos reservados. Solo se actualizan los que están visibles: la ventana y el logo minimizado no se mantienen animando simultáneamente salvo durante su transición. Cada grupo también utiliza cuatro bases de llama tenues y un pequeño reflejo de contorno. El panel oculto y la ventana totalmente fuera de pantalla suspenden sus efectos.
+
+La adaptación utiliza el tiempo real entre `Heartbeat`, con promedio, espera inicial y tiempos distintos para bajar/subir. Una pausa aislada larga no provoca una degradación. Se puede cambiar el máximo inicial en `DEFAULT_QUALITY` o modificar el atributo `VisualQuality` del ScreenGui con `Low`, `Medium` o `High`; `EffectiveQuality` muestra el nivel activo.
+
+## Funciones conservadas
+
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres. Al elegir una opción se abre únicamente su panel a la derecha. Pulsar la misma opción o la flecha deja visible solo el menú.
+- Main, Visuals y Scripts siguen vacíos para el trabajo posterior. Settings contiene solamente el nuevo control de calidad; no vuelve a introducir Themes, controles de tamaño ni textos de relleno.
+- Avatar circular del usuario, UserId y contador `HH:MM:SS` desde cero por ejecución. El contador sigue al plegar, minimizar y reaparecer.
+- Arrastre con ratón o toque desde las cabeceras. El logo R minimizado también se puede arrastrar. Se permite sacar el GUI de cualquiera de los cuatro bordes de la pantalla.
+- Si queda totalmente fuera, aparece una R de recuperación. `RightShift` también minimiza, restaura o recupera la ventana.
+- Controles PNG originales: línea → minimizar; flecha → plegar/desplegar; X → cerrar. Los márgenes transparentes se recortan únicamente para mostrarlos con `ImageRectOffset`/`ImageRectSize`, sin modificar sus archivos.
+- Desplazamiento vertical del contenido cuando falta espacio. Deslizar una página no arrastra la ventana. Se conserva el ajuste automático al tamaño del dispositivo.
+
+## Arquitectura y recursos
+
+El código completo permanece en **Reyzn X.lua**, sin módulos externos descargados. Sus componentes locales reutilizables son `FireAura`, `ParticlePool`, `Quality` y el coordinador `VFX.reflections`. Comparten un solo `Heartbeat`, la gestión de tweens, las conexiones, los hilos de carga y el compositor de transparencia. Al cerrar o reejecutar se cancelan animaciones y cargas y se desconectan todos los eventos.
+
+La animación usa objetos GUI y APIs nativas de Roblox, incluyendo `ImageLabel`, `ImageButton`, `UIGradient`, `UIStroke`, `UICorner`, `UIScale`, `TweenService` y `RunService`. No usa shaders personalizados ni emisores 3D superpuestos a la pantalla. El compositor existente evita añadir un `CanvasGroup` del tamaño de toda la ventana y su textura intermedia.
+
+Se conservó el cargador de imágenes del proyecto: cinco PNG originales y una nueva textura de fuego, desde seis URL fijas de este repositorio. Necesita `getcustomasset` (o `getsynasset`) y `writefile` del entorno de ejecución; **esas funciones no son APIs de Roblox Studio**. `isfile`/`readfile` permiten reutilizar la caché, validando tamaño, firma y final PNG. Si faltan las APIs o falla la red, aparecen los iconos nativos de respaldo y la interfaz sigue respondiendo; el fuego texturizado no se muestra. Para imágenes nativas en una experiencia publicada, los recursos deben subirse a Roblox y usar sus IDs autorizados.
+
+No se ejecuta ningún contenido descargado por el GUI. Los recursos del usuario están sin cambios en `assets/reyzn-x/`; [ASSET_NOTES.md](assets/reyzn-x/ASSET_NOTES.md) documenta la textura nueva y su prompt.
+
+El repositorio original `hzReyzn/scriptshz` no se modifica. No se incorporaron scripts afiliados, mantenimiento, pantallas de carga, vídeo ni audio.
 
 ## Verificación
 
@@ -31,4 +59,6 @@ El hub original `hzReyzn/scriptshz` permanece intacto. No se incorporaron script
 python tests/run.py /ruta/a/luau
 ```
 
-El comando compila el script y ejecuta 17 escenarios deterministas: panel independiente, cambios rápidos, arrastre por los cuatro bordes, recuperación, ratón y toque, minimizar repetidamente e interrumpir transiciones, carga/caché/fallos de PNG, contador, avatar, tamaños móviles, reejecución y limpieza de conexiones. También comprueban los dos textos PNG, las acciones de los botones de imagen y que el aura quede fuera del marco, use una cantidad fija de objetos y desaparezca con su interfaz. Las pruebas usan un entorno simulado; no sustituyen la comprobación del renderizado y los gestos en Roblox y en el ejecutor real.
+El comando compila el archivo y ejecuta **21 escenarios deterministas**. Comprueban navegación y plegado, arrastre libre y recuperación, ratón/toque, cambios rápidos, ocho ciclos de minimizar/restaurar, reloj, avatar, seis tamaños de pantalla, carga/caché/fallos de recursos, reejecución y limpieza. Las pruebas nuevas verifican texto nativo, compatibilidad de los PNG originales, límites y reutilización de partículas, posición exterior, cancelación de pulsaciones, reflejos alternados, calidad adaptable con histéresis y geometría invariable al cambiar de calidad.
+
+Estas pruebas simulan el cliente; no miden FPS reales ni sustituyen la comprobación del renderizado, la carga de imágenes y los gestos en Roblox/Android.

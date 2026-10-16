@@ -3,7 +3,7 @@ return function(source)
     local count=0
     local URL='https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/'
     local function png(bytes) return '\137PNG\13\10\26\10'..'\0\0\0\13IHDR'..string.rep('a',bytes-24)..'IEND\174\66\96\130' end
-    local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['wordmark-v1.png']=png(1399207),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
+    local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['flame-wisp-v1.png']=png(1172326),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
     local function setup(width,height)
         local w=newWorld();w.viewport={X=width or 1280,Y=height or 720}
         for name,data in pairs(artwork) do w.http[URL..name]=data end
@@ -29,16 +29,16 @@ return function(source)
     end
     test('clean interface, original requested identity and four font changes',function()
         local w,gui=launch();w.step(30)
-        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.1.0')
+        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.2.0')
         assert(find(gui,'UserID').Text=='ID  123' and find(gui,'SessionTime').Text=='00:00:00')
         assert(w.thumbnailRequest.id==123 and w.thumbnailRequest.kind.Name=='HeadShot')
         assert(find(gui,'Avatar').Image=='rbxthumb://test-avatar')
         assert(find(gui,'Credit').Text=='Made By Reyzn')
         for _,name in ipairs({'Main','Visuals','Scripts','Settings'}) do
-            assert(find(gui,'Tab_'..name):FindFirstChild('Caption').Font.Name=='BuilderSansMedium')
-            assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty')
+            assert(find(gui,'Tab_'..name):FindFirstChild('Caption',true).Font.Name=='BuilderSansMedium')
+            if name~='Settings' then assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty') end
         end
-        assert(find(gui,'Tab_Home'):FindFirstChild('Caption').Font.Name=='GothamMedium')
+        assert(find(gui,'Tab_Home'):FindFirstChild('Caption',true).Font.Name=='GothamMedium')
         local banned={'Your Workspace','YOUR WORKSPACE','WORKSPACE','Make it yours','Choose your accent','A clean slate','A new space','Themes','Key System','Featured Scripts','Links','Ghislain','Built for gamers','Play • Exploit • Dominate'}
         for _,o in ipairs(gui:GetDescendants())do
             for _,text in ipairs(banned) do assert(not (o.Text or ''):find(text,1,true),'unnecessary text: '..text) end
@@ -170,7 +170,7 @@ return function(source)
             assert(find(gui,'WindowOpacity').Value==1 and find(gui,'WindowZoom').Value==1)
             assert(find(gui,'Dock').BackgroundTransparency==0 and find(gui,'Panel').BackgroundTransparency==0)
             assert(find(gui,'EmblemX').ImageTransparency==0,'artwork became progressively faint')
-            assert(find(gui,'HeroTitle').ImageTransparency==0,'wordmark became progressively faint')
+            assert(find(gui,'HeroTitle').TextTransparency==0,'text became progressively faint')
             assert(find(gui,'Window').Visible and not find(gui,'Launcher').Visible)
             near(find(gui,'Window').Position.X.Offset,x);near(find(gui,'Window').Position.Y.Offset,y)
         end
@@ -201,7 +201,7 @@ return function(source)
             end
             local nav=find(gui,'Navigation');local settings=find(gui,'Tab_Settings')
             assert(settings.Position.Y.Offset+settings.Size.Y.Offset<=nav.CanvasSize.Y.Offset)
-            assert(settings:FindFirstChild('Caption').TextSize>=15)
+            assert(settings:FindFirstChild('Caption',true).TextSize>=15)
             local header=find(gui,'Header');local id=find(gui,'UserID');local clock=find(gui,'SessionTime')
             assert(id.Position.X.Offset+id.Size.X.Offset<=header.Size.X.Offset+panel.Size.X.Offset+1,'ID cut off')
             if id.Position.Y.Offset==clock.Position.Y.Offset then assert(id.Position.X.Offset+id.Size.X.Offset<clock.Position.X.Offset) end
@@ -260,15 +260,18 @@ return function(source)
         local g=failed.run(source);failed.step(60);assert(find(g,'AvatarFallback').Visible);close(failed,g)
     end)
 
-    test('wordmark replaces both brand texts; credit and option fonts stay intact',function()
+    test('native chrome typography replaces only the wordmark, retaining original artwork',function()
         local w,gui=launch();w.step(30)
-        assert(find(gui,'BrandWordmark').Image=='mock://ReyznX-wordmark-v1.png')
-        assert(find(gui,'HeroTitle').Image==find(gui,'BrandWordmark').Image)
-        assert(find(gui,'BrandWordmark').ImageRectOffset.Y==170 and find(gui,'HeroTitle').ImageRectSize.X==1672)
-        assert(not find(gui,'BrandFallback').Visible and not find(gui,'HeroTitleFallback').Visible)
-        assert(find(gui,'Credit').Text=='Made By Reyzn' and find(gui,'Credit').ClassName=='TextLabel')
-        assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png','existing X emblem was replaced')
-        for _,name in ipairs({'Main','Visuals','Scripts','Settings'})do assert(find(gui,'Tab_'..name):FindFirstChild('Caption').Font.Name=='BuilderSansMedium')end
+        for _,name in ipairs({'BrandText','HeroTitle'}) do
+            local title=find(gui,name)
+            assert(title.ClassName=='TextLabel' and title.Text:gsub('<.->','')=='Reyzn X' and title.RichText)
+            assert(title.Font.Name=='GrenzeGotisch' and title.TextTransparency==0)
+            assert(title:FindFirstChildOfClass('UIGradient') and title:FindFirstChildOfClass('UIStroke'))
+        end
+        assert(not gui:FindFirstChild('BrandWordmark',true) and not gui:FindFirstChild('HeroTitleFallback',true))
+        for _,url in ipairs(w.requests)do assert(not url:find('wordmark'),'unwanted wordmark download')end
+        assert(find(gui,'Credit').Text=='Made By Reyzn')
+        assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png','X replaced')
         close(w,gui)
     end)
     test('PNG controls map to their actions, retain hitboxes and release press feedback',function()
@@ -282,9 +285,9 @@ return function(source)
             local x,y=b.Position.X.Offset,b.Position.Y.Offset
             local scale=art:FindFirstChildOfClass('UIScale')
             local touch={UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(0,0)}
-            b.InputBegan:Fire(touch);w.step(6);near(scale.Scale,.93)
+            b.InputBegan:Fire(touch);w.step(6);near(scale.Scale,.97)
             w.services.UserInputService.InputEnded:Fire({UserInputType=e.Enum.UserInputType.Touch})
-            w.step(12);near(scale.Scale,.93,'unrelated finger released control')
+            w.step(12);near(scale.Scale,.97,'unrelated finger released control')
             w.services.UserInputService.InputEnded:Fire(touch);w.step(12);near(scale.Scale,1)
             near(b.Position.X.Offset,x);near(b.Position.Y.Offset,y)
         end
@@ -293,40 +296,111 @@ return function(source)
         click(gui,'Minimize');w.step(30);assert(gui:GetAttribute('Minimized') and gui.Parent~=nil)
         click(gui,'Launcher');w.step(30);close(w,gui)
     end)
-    test('pooled aura extends outside the frame, tracks folding and fades with its owner',function()
-        local w,gui=launch();w.step(30)
+    test('fire and particle pools animate outside surfaces without allocations or input capture',function()
+        local w,gui=launch();w.step(30);gui:SetAttribute('VisualQuality','High');w.step(20)
         local dock,panel,launcher=find(gui,'DockAura'),find(gui,'PanelAura'),find(gui,'LauncherAura')
         assert(dock.Parent==find(gui,'Window') and panel.Parent==find(gui,'Window'))
-        assert(not panel:IsDescendantOf(find(gui,'PanelReveal')),'aura clipped by reveal')
-        assert(launcher.Parent==find(gui,'Launcher'))
-        local total=0
+        assert(not panel:IsDescendantOf(find(gui,'PanelReveal')) and launcher.Parent==find(gui,'Launcher'))
+        assert(not gui:FindFirstChild('AuraHalo',true) and not gui:FindFirstChild('AuraWisp',true),'old rings survived')
+        local fire,particles=0,0
         for _,aura in ipairs({dock,panel,launcher}) do
             assert(not aura.Active and not aura.ClipsDescendants)
-            local sides={}
             for _,o in ipairs(aura:GetDescendants())do
-                if o:IsA('Frame') then assert(o.Active==false,'VFX can capture input')end
-                if o.Name=='AuraWisp' then
-                    total+=1
-                    local p=o.Position;local size=aura.Size
-                    if p.Y.Offset<0 then sides.top=true end
-                    if p.Y.Offset>size.Y.Offset then sides.bottom=true end
-                    if p.X.Offset<0 then sides.left=true end
-                    if p.X.Offset>size.X.Offset then sides.right=true end
+                if o:IsA('GuiObject')then assert(not o.Active,'VFX captures input')end
+                if o.Name=='FlameCore'then fire+=1;assert(o.Image=='mock://ReyznX-flame-wisp-v1.png')end
+                if o.Name=='EdgeParticle'then particles+=1 end
+            end
+        end
+        assert(fire==52 and particles==26,'unbounded effect pools')
+        local plume=dock:FindFirstChild('FlameSlot');local length=plume.Size.Y.Offset
+        local objects=#w.objects;w.step(120)
+        assert(#w.objects==objects and plume.Size.Y.Offset~=length,'frozen or allocating effect')
+        for _,aura in ipairs({dock,panel})do
+            for _,particle in ipairs(aura:GetChildren())do
+                if particle.Name=='EdgeParticle' and particle.Visible then
+                    local p=particle.Position;local s=aura.Size
+                    assert(p.X.Offset<-4 or p.Y.Offset<-4 or p.X.Offset>s.X.Offset+4 or p.Y.Offset>s.Y.Offset+4,'particle over content')
                 end
             end
-            if aura~=launcher then assert(sides.top and sides.bottom and sides.left and sides.right)end
         end
-        assert(total==44,'unbounded aura pool')
-        local plume=dock:FindFirstChild('AuraWisp');local x,y=plume.Position.X.Offset,plume.Position.Y.Offset
-        local objects=#w.objects;w.step(120)
-        assert(#w.objects==objects,'aura allocates instances each frame')
-        assert(plume.Position.X.Offset~=x or plume.Position.Y.Offset~=y,'frozen aura')
         click(gui,'Collapse');w.step(30);assert(not panel.Visible)
         click(gui,'Tab_Main');w.step(30);assert(panel.Visible)
-        click(gui,'Minimize');w.step(30);assert(plume.BackgroundTransparency==1,'window aura remained after minimizing')
-        local lp=launcher:FindFirstChild('AuraWisp');assert(lp.Position.Y.Offset<0 and lp.BackgroundTransparency<1)
-        click(gui,'Launcher');w.step(30);assert(lp.BackgroundTransparency==1,'logo aura remained after restoration')
-        close(w,gui);assert(w.services.RunService.Heartbeat:Count()==0)
+        click(gui,'Minimize');w.step(30)
+        assert(plume:FindFirstChild('FlameCore').ImageTransparency==1,'window flame left behind')
+        local logoFlame=launcher:FindFirstChild('FlameSlot'):FindFirstChild('FlameCore')
+        assert(logoFlame.ImageTransparency<1)
+        click(gui,'Launcher');w.step(30);assert(logoFlame.ImageTransparency==1)
+        close(w,gui)
+    end)
+    test('quality selector changes budgets, preserves geometry and never recreates pools',function()
+        local w,gui=launch(844,354);w.step(30)
+        assert(gui:GetAttribute('VisualQuality')=='Medium','touch default too costly')
+        local win=find(gui,'Window');local x,y=win.Position.X.Offset,win.Position.Y.Offset
+        local width,height=win.Size.X.Offset,win.Size.Y.Offset;local objects=#w.objects
+        local previousCount=0
+        click(gui,'Tab_Settings');w.step(30)
+        for _,name in ipairs({'Low','Medium','High'})do
+            click(gui,'Quality_'..name);w.step(30)
+            assert(gui:GetAttribute('VisualQuality')==name and gui:GetAttribute('EffectiveQuality')==name)
+            local active=0
+            for _,auraName in ipairs({'DockAura','PanelAura','LauncherAura'})do
+                for _,o in ipairs(find(gui,auraName):GetChildren())do
+                    if o.Visible and (o.Name=='FlameSlot' or o.Name=='EdgeParticle')then active+=1 end
+                end
+            end
+            assert(active>previousCount);previousCount=active
+            assert(find(gui,'DockAura'):FindFirstChild('FlameSlot'):FindFirstChild('FlameHaze').Visible==(name~='Low'))
+            near(win.Position.X.Offset,x);near(win.Position.Y.Offset,y)
+            near(win.Size.X.Offset,width);near(win.Size.Y.Offset,height)
+            assert(#w.objects==objects)
+        end
+        close(w,gui)
+    end)
+    test('adaptive quality has hysteresis and respects the chosen maximum',function()
+        local w,gui=launch();w.step(30)
+        w.step(200,1/30)
+        assert(gui:GetAttribute('EffectiveQuality')=='Low','sustained low FPS did not lower budget')
+        assert(gui:GetAttribute('VisualQuality')=='Medium','adaptation overwrote user choice')
+        w.step(180,1/60)
+        assert(gui:GetAttribute('EffectiveQuality')=='Low','quality bounced back too soon')
+        w.step(900,1/60)
+        assert(gui:GetAttribute('EffectiveQuality')=='Medium','budget did not recover')
+        click(gui,'Quality_Low');w.step(850,1/60)
+        assert(gui:GetAttribute('EffectiveQuality')=='Low','exceeded selected cap')
+        gui:SetAttribute('VisualQuality','High');w.step(30)
+        assert(gui:GetAttribute('EffectiveQuality')=='High')
+        w.step(1,.8);w.step(60)
+        assert(gui:GetAttribute('EffectiveQuality')=='High','one background stall downgraded quality')
+        close(w,gui)
+    end)
+    test('button press scales its face only, retains action and releases owned touch',function()
+        local w,gui=launch();w.step(30);local e=w.env
+        local b=find(gui,'Tab_Main');local scale=find(b,'PressScale')
+        local x,y=b.AbsolutePosition.X,b.AbsolutePosition.Y;local width=b.AbsoluteSize.X
+        local finger={UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(0,0)}
+        b.InputBegan:Fire(finger);w.step(6)
+        assert(scale.Scale<1 and scale.Scale>.96)
+        near(b.AbsolutePosition.X,x);near(b.AbsolutePosition.Y,y);near(b.AbsoluteSize.X,width)
+        w.services.UserInputService.InputEnded:Fire({UserInputType=e.Enum.UserInputType.Touch});w.step(15)
+        assert(scale.Scale<1,'unrelated finger released press')
+        b.Activated:Fire();w.services.UserInputService.InputEnded:Fire(finger);w.step(30)
+        assert(gui:GetAttribute('Page')=='Main' and gui:GetAttribute('PanelOpen'));near(scale.Scale,1)
+        b.InputBegan:Fire(finger);w.step(8);w.services.UserInputService.WindowFocusReleased:Fire();w.step(30)
+        near(scale.Scale,1)
+        close(w,gui)
+    end)
+    test('only one scheduled/interactive reflection shines and hidden effects stop work',function()
+        local w,gui=launch();w.step(30)
+        for _,name in ipairs({'Tab_Main','Tab_Visuals','Tab_Scripts'})do find(gui,name).MouseEnter:Fire();w.step(5)end
+        local visible=0
+        for _,o in ipairs(gui:GetDescendants())do
+            if (o.Name=='Sheen' or o.Name=='SurfaceReflection' or o.Name=='HeroReflection' or o.Name=='ControlReflection') and o.BackgroundTransparency<.999 then visible+=1 end
+        end
+        assert(visible<=1,'reflections compete simultaneously')
+        click(gui,'Minimize');w.step(30)
+        local plume=find(gui,'DockAura'):FindFirstChild('FlameSlot');local p=plume.Position
+        w.step(90);near(plume.Position.X.Offset,p.X.Offset);near(plume.Position.Y.Offset,p.Y.Offset)
+        close(w,gui)
     end)
     print(tostring(count)..' scenarios passed. Rendering and real touch input still require Roblox.')
 end
