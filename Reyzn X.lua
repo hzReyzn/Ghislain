@@ -1,5 +1,5 @@
 -- Reyzn X | Made By Reyzn
--- Client GUI only. The fixed HTTP resources below are PNG artwork, never code.
+-- Client GUI only. The fixed HTTP resources below are PNG/JPEG artwork, never code.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -12,11 +12,13 @@ local playerGui = player:WaitForChild("PlayerGui")
 local previous = playerGui:FindFirstChild("ReyznX")
 if previous then previous:Destroy() end
 
-local VERSION = "2.3.0"
+-- Public version changes ONLY at the owner's explicit request.
+local VERSION = "1.0"
+local BUILD = "home-neon-20261016"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
-local ICON_TRANSPARENCY, BACKGROUND_TRANSPARENCY = .85, .76
+local ICON_TRANSPARENCY, BACKGROUND_TRANSPARENCY = .85, .83
 local VFX_RATE = 60 -- Ultra High is fixed; no automatic quality reduction.
 local C = {
     base=Color3.fromRGB(10,10,15), panel=Color3.fromRGB(16,15,23),
@@ -26,6 +28,7 @@ local C = {
     violet=Color3.fromRGB(157,103,239), light=Color3.fromRGB(213,181,255),
     deep=Color3.fromRGB(60,31,99), green=Color3.fromRGB(132,225,179), ice=Color3.fromRGB(180,207,255),
     rose=Color3.fromRGB(212,152,219), chrome=Color3.fromRGB(235,237,247),
+    pink=Color3.fromRGB(245,92,202), orchid=Color3.fromRGB(192,114,255),
 }
 local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
@@ -127,9 +130,9 @@ local paths={
     close={{{6,6},{18,18}},{{18,6},{6,18}}},
     minimize={{{5,16},{19,16}}}, fold={{{14,5},{7,12},{14,19}}},
 }
-local artworkImages={IconHome={},IconMain={},IconScripts={},IconSettings={},Background={}}
+local artworkImages={IconHome={},IconMain={},IconVisuals={},IconScripts={},IconSettings={},Background={},Emblem={}}
 local iconSprites={}
-local iconAssets={home="IconHome",cube="IconMain",code="IconScripts",settings="IconSettings"}
+local iconAssets={home="IconHome",cube="IconMain",spark="IconVisuals",code="IconScripts",settings="IconSettings"}
 local function icon(parent,kind,pos,size,color)
     local host=frame(parent,"Icon_"..kind,pos,UDim2.fromOffset(size,size),nil,1)
     local fallback={}
@@ -253,8 +256,7 @@ connect(Input.InputEnded,function(input) releaseButtons(input,false) end)
 connect(Input.WindowFocusReleased,function() releaseButtons(nil,true) end)
 
 local function brandText(parent,name,pos,size,pixels)
-    local text=label(parent,name,'Reyzn <font face="GothamBold">X</font>',pos,size,pixels,C.white,Enum.Font.GrenzeGotisch)
-    text.RichText=true
+    local text=label(parent,name,"Reyzn",pos,size,pixels,C.white,Enum.Font.GrenzeGotisch)
     text.TextColor3=Color3.new(1,1,1)
     text.TextTruncate=Enum.TextTruncate.None
     -- Static chrome bands keep the lettering crisp; only a rare separate sweep
@@ -270,6 +272,8 @@ end
 UI.gui=make("ScreenGui",playerGui,{Name="ReyznX",ResetOnSpawn=false,DisplayOrder=50,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,IgnoreGuiInset=false})
 pcall(function() UI.gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets end)
 UI.gui:SetAttribute("Version",VERSION)
+UI.gui:SetAttribute("Build",BUILD)
+UI.gui:SetAttribute("ScriptStatus","Active")
 UI.gui:SetAttribute("VisualQuality","Ultra High")
 UI.gui:SetAttribute("EffectiveQuality","Ultra High")
 UI.gui:SetAttribute("VFXRate",VFX_RATE)
@@ -299,20 +303,29 @@ local InwardLight={};InwardLight.__index=InwardLight
 function InwardLight.new(parent,seed)
     local self=setmetatable({fields={},seed=seed},InwardLight)
     local clip=frame(parent,"InwardLight",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),nil,1)
-    corner(clip,14);clip.ClipsDescendants=true;clip.Active=false
+    clip.ZIndex=3;clip.ClipsDescendants=true;clip.Active=false
     for side=1,4 do
-        local field=frame(clip,"InwardGlow",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),.88)
+        local field=frame(clip,"InwardGlow",UDim2.fromScale(0,0),UDim2.fromScale(1,1),nil,1)
         field.Active=false
         local horizontal=side%2==1
-        field.Size=horizontal and UDim2.new(.58,0,0,22) or UDim2.new(0,20,.58,0)
-        local wash=gradient(field,{C.ice,C.violet,C.rose},horizontal and 90 or 0)
-        local reverse=side==2 or side==3
-        wash.Transparency=NumberSequence.new({
-            NumberSequenceKeypoint.new(0,reverse and 1 or .05),
-            NumberSequenceKeypoint.new(.45,.78),
-            NumberSequenceKeypoint.new(1,reverse and .05 or 1)})
-        corner(field,12)
-        self.fields[side]={node=field,wash=wash}
+        field.Size=horizontal and UDim2.new(.58,0,0,26) or UDim2.new(0,24,.58,0)
+        local strips={}
+        -- Feather both dimensions: the cross-edge gradient fades inward, while
+        -- the strip weights fade both ends. No hard-ended glowing pills.
+        for i=1,9 do
+            local strip=frame(field,"GlowFeather",horizontal and UDim2.fromScale((i-1)/9,0) or UDim2.fromScale(0,(i-1)/9),
+                horizontal and UDim2.fromScale(1/9,1) or UDim2.fromScale(1,1/9),Color3.new(1,1,1),1)
+            strip.Active=false
+            local wash=gradient(strip,side%2==1 and {C.pink,C.violet,C.deep} or {C.deep,C.orchid,C.rose},horizontal and 90 or 0)
+            local reverse=side==2 or side==3
+            wash.Transparency=NumberSequence.new({
+                NumberSequenceKeypoint.new(0,reverse and 1 or 0),
+                NumberSequenceKeypoint.new(.25,reverse and .96 or .55),
+                NumberSequenceKeypoint.new(.75,reverse and .55 or .96),
+                NumberSequenceKeypoint.new(1,reverse and 0 or 1)})
+            strips[i]={node=strip,weight=math.sin((i-.5)/9*math.pi)^2}
+        end
+        self.fields[side]={node=field,strips=strips}
     end
     return self
 end
@@ -321,19 +334,54 @@ function InwardLight:update(time,burst)
         local travel=.21+.19*math.sin(time*.24+self.seed+side*1.7)
         local node=item.node
         if side==1 then node.Position=UDim2.new(travel,0,0,0)
-        elseif side==2 then node.Position=UDim2.new(1,-20,travel,0)
-        elseif side==3 then node.Position=UDim2.new(travel,0,1,-22)
+        elseif side==2 then node.Position=UDim2.new(1,-24,travel,0)
+        elseif side==3 then node.Position=UDim2.new(travel,0,1,-26)
         else node.Position=UDim2.new(0,0,travel,0) end
-        alpha(node,"BackgroundTransparency",.89-.045*math.sin(time*.7+self.seed+side)^2-burst*.025)
+        local strength=.21+.06*math.sin(time*.7+self.seed+side)^2+burst*.025
+        for _,strip in ipairs(item.strips) do alpha(strip.node,"BackgroundTransparency",1-strength*strip.weight) end
+    end
+end
+local function background(parent,radius)
+    local image=imageLabel(parent,"InterfaceBackground",UDim2.fromOffset(1,1),UDim2.new(1,-2,1,-2))
+    image.ZIndex=2;image.ScaleType=Enum.ScaleType.Crop;image.Active=false
+    image.ImageColor3=Color3.new(1,1,1);corner(image,radius)
+    alpha(image,"ImageTransparency",BACKGROUND_TRANSPARENCY)
+    artworkImages.Background[#artworkImages.Background+1]=image
+    return image
+end
+-- The supplied emblem remains unchanged. Three low-opacity copies provide a
+-- traveling bloom and a narrow highlight; only gradients/alpha move each tick.
+local EmblemNeon={};EmblemNeon.__index=EmblemNeon
+function EmblemNeon.new(host)
+    local self=setmetatable({layers={}},EmblemNeon)
+    for i,data in ipairs({{"EmblemBloomWide",16,.40,0},{"EmblemBloomNear",6,.48,.5},{"EmblemSweep",0,.68,0}}) do
+        local image=imageLabel(host,data[1],UDim2.fromOffset(-data[2]/2,-data[2]/2),UDim2.new(1,data[2],1,data[2]))
+        image.ZIndex=i==3 and 4 or i;image.Active=false
+        local wash=gradient(image,{C.pink,C.light,C.violet,C.rose},0)
+        if i==3 then
+            wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.26,1),
+                NumberSequenceKeypoint.new(.46,.08),NumberSequenceKeypoint.new(.54,.08),NumberSequenceKeypoint.new(.74,1),NumberSequenceKeypoint.new(1,1)})
+        end
+        alpha(image,"ImageTransparency",1)
+        artworkImages.Emblem[#artworkImages.Emblem+1]=image
+        self.layers[i]={image=image,wash=wash,strength=data[3],phase=data[4]}
+    end
+    return self
+end
+function EmblemNeon:update(time,burst)
+    local tint=C.pink:Lerp(C.orchid,.5+.5*math.sin(time*.8))
+    for _,layer in ipairs(self.layers) do
+        local progress=(time/4.8+layer.phase)%1
+        local envelope=math.sin(progress*math.pi)^2
+        layer.wash.Offset=Vector2.new(-.9+1.8*progress,0)
+        layer.image.ImageColor3=tint
+        alpha(layer.image,"ImageTransparency",1-envelope*(layer.strength+burst*.04))
     end
 end
 local function surface(parent,name,pos,size,scope)
     local o=frame(parent,name,pos,size,Color3.new(1,1,1),0,scope);corner(o,16)
     gradient(o,{C.panel,C.base,C.black},100)
-    local background=imageLabel(o,"InterfaceBackground",UDim2.fromOffset(1,1),UDim2.new(1,-2,1,-2))
-    background.ScaleType=Enum.ScaleType.Crop;background.Active=false;corner(background,15)
-    alpha(background,"ImageTransparency",BACKGROUND_TRANSPARENCY)
-    artworkImages.Background[#artworkImages.Background+1]=background
+    background(o,15)
     local inward=InwardLight.new(o,name=="Dock" and .7 or 2.3)
     local edge=stroke(o,Color3.new(1,1,1),.36,1)
     local metal=gradient(edge,{C.steel,C.silver,C.violet,C.black,C.violet},24)
@@ -343,6 +391,7 @@ local function surface(parent,name,pos,size,scope)
     local beamGradient=gradient(beam,{C.light,C.silver,C.violet},0);fadeGradient(beamGradient)
     local sheen=frame(o,"SurfaceReflection",UDim2.fromOffset(3,3),UDim2.new(1,-6,1,-6),C.chrome,1)
     corner(sheen,14);local sweep=gradient(sheen,{C.chrome,C.ice},28);fadeGradient(sweep)
+    inner.ZIndex=3;beam.ZIndex=3;sheen.ZIndex=3
     addReflection(sheen,sweep,.035)
     return o,{edge=edge,metal=metal,beam=beam,beamGradient=beamGradient,inward=inward}
 end
@@ -443,27 +492,28 @@ local heroSheen=frame(UI.hero,"HeroReflection",UDim2.fromOffset(2,2),UDim2.new(1
 corner(heroSheen,12);local heroSweep=gradient(heroSheen,{C.chrome,C.light},28);fadeGradient(heroSweep)
 addReflection(heroSheen,heroSweep,.05)
 UI.heroTitle=brandText(UI.hero,"HeroTitle",UDim2.fromOffset(20,10),UDim2.fromOffset(268,100),48)
-UI.heroUnderline=frame(UI.hero,"SilverAccent",UDim2.fromOffset(24,94),UDim2.fromOffset(46,2),C.silver,.08)
-gradient(UI.heroUnderline,{C.light,C.silver,C.deep},0)
-UI.openMain=button(UI.hero,"OpenMain",UDim2.fromOffset(22,128),UDim2.fromOffset(154,42))
-label(UI.openMain,"Caption","Main",UDim2.fromOffset(16,0),UDim2.new(1,-48,1,0),17,C.white,optionFont)
-icon(UI.openMain,"arrow",UDim2.new(1,-33,0,11),20,C.light)
+UI.heroTitle.ZIndex=4
+UI.heroBackground=background(UI.hero,12)
+heroSheen.ZIndex=3
+UI.status=frame(UI.hero,"ScriptInfo",UDim2.fromOffset(22,116),UDim2.fromOffset(188,64),nil,1)
+UI.status.ZIndex=4
+UI.statusLabel=label(UI.status,"StatusLabel","Status",UDim2.fromOffset(0,0),UDim2.fromOffset(62,26),17,C.muted,optionFont)
+UI.statusDot=frame(UI.status,"StatusDot",UDim2.fromOffset(71,11),UDim2.fromOffset(4,4),C.pink,.08)
+corner(UI.statusDot,4)
+UI.statusValue=label(UI.status,"StatusValue","Active",UDim2.fromOffset(82,0),UDim2.new(1,-82,0,26),17,C.white,optionFont)
+UI.versionLabel=label(UI.status,"VersionLabel","Version",UDim2.fromOffset(0,29),UDim2.fromOffset(62,26),17,C.muted,optionFont)
+UI.versionValue=label(UI.status,"VersionValue",VERSION,UDim2.fromOffset(71,29),UDim2.new(1,-71,0,26),16,C.light,Enum.Font.RobotoMono)
 UI.emblemHost=frame(UI.hero,"EmblemHost",UDim2.new(1,-224,0,2),UDim2.fromOffset(220,196),nil,1)
+UI.emblemHost.ZIndex=4
+UI.emblemNeon=EmblemNeon.new(UI.emblemHost)
 UI.xFallback=label(UI.emblemHost,"XFallback","X",UDim2.fromScale(0,0),UDim2.fromScale(1,1),92,C.light,Enum.Font.GothamBold)
-UI.xFallback.TextXAlignment=Enum.TextXAlignment.Center
-UI.xGlow=imageLabel(UI.emblemHost,"EmblemGlow",UDim2.new(0,-5,0,-5),UDim2.new(1,10,1,10))
-UI.xGlow.ImageColor3=C.violet;alpha(UI.xGlow,"ImageTransparency",.87)
+UI.xFallback.ZIndex=3;UI.xFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.xImage=imageLabel(UI.emblemHost,"EmblemX",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
-UI.heroGlint=frame(UI.hero,"HeroGlint",UDim2.new(.65,0,0,0),UDim2.fromOffset(80,1),C.silver,.12)
-local glintGradient=gradient(UI.heroGlint,{C.violet,C.white,C.deep},0);fadeGradient(glintGradient)
-UI.shortcuts={}
-for i,data in ipairs({{"Main","cube"},{"Visuals","spark"}}) do
-    local b=button(pages.Home,"Shortcut_"..data[1],UDim2.new((i-1)*.5,1,0,214),UDim2.new(.5,-9,0,58))
-    icon(b,data[2],UDim2.fromOffset(15,17),24,C.light)
-    local caption=label(b,"Caption",data[1],UDim2.fromOffset(51,0),UDim2.new(1,-80,1,0),17,C.white,optionFont)
-    local arrow=icon(b,"arrow",UDim2.new(1,-32,0,19),20,C.muted)
-    UI.shortcuts[data[1]]={button=b,caption=caption,arrow=arrow}
-end
+UI.xImage.ZIndex=3;artworkImages.Emblem[#artworkImages.Emblem+1]=UI.xImage
+-- Explicit sibling layers keep supplied backgrounds visible and controls above
+-- the decoration, independently of creation order or later asset completion.
+for _,object in ipairs({UI.dockCrown,UI.brand,UI.dockDivider,UI.nav,UI.controls,
+    UI.header,UI.headerLine,UI.content,UI.credit}) do object.ZIndex=4 end
 
 UI.launcher=make("ImageButton",UI.screen,{Name="Launcher",Image="",BackgroundTransparency=1,Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(20,150),AutoButtonColor=false,Visible=false,Selectable=true},"launcher")
 UI.launcherScale=make("UIScale",UI.launcher,{Scale=.92})
@@ -727,25 +777,26 @@ local function resize(initial)
     UI.content.Size=UDim2.new(1,-24,1,-headerH-48)
     local cw=pw-24
     local narrow=cw<360
-    local heroHeight=narrow and 248 or math.min(200,math.max(136,h-8-headerH-54))
+    local heroHeight=narrow and 246 or math.min(262,math.max(156,h-8-headerH-54))
     UI.hero.Size=UDim2.new(1,-8,0,heroHeight)
-    UI.heroTitle.TextSize=narrow and math.min(32,math.floor((cw-28)/4.1)) or math.min(48,math.floor(cw*.52/4.1))
-    UI.heroTitle.Position=UDim2.fromOffset(narrow and 10 or 18,narrow and 4 or 10)
-    UI.heroTitle.Size=UDim2.fromOffset(narrow and cw-28 or math.min(268,cw*.52),narrow and 50 or math.min(100,heroHeight-86))
-    UI.heroUnderline.Visible=not narrow
-    UI.heroUnderline.Position=UDim2.fromOffset(24,heroHeight<180 and heroHeight-72 or 124)
-    UI.emblemHost.Size=UDim2.fromOffset(narrow and math.min(cw-28,152) or math.min(cw*.45,220),narrow and 138 or heroHeight-6)
-    UI.emblemHost.Position=narrow and UDim2.new(.5,-UI.emblemHost.Size.X.Offset/2,0,52) or UDim2.new(1,-UI.emblemHost.Size.X.Offset-5,0,3)
-    UI.openMain.Position=UDim2.fromOffset(narrow and 15 or 22,narrow and 192 or heroHeight-60)
-    UI.openMain.Size=UDim2.fromOffset(narrow and cw-38 or math.min(154,cw*.46),40)
-    for i,name in ipairs({"Main","Visuals"}) do
-        local item=UI.shortcuts[name]
-        item.button.Position=narrow and UDim2.fromOffset(1,260+(i-1)*62) or UDim2.new((i-1)*.5,1,0,heroHeight+14)
-        item.button.Size=narrow and UDim2.new(1,-8,0,54) or UDim2.new(.5,-9,0,58)
-        item.arrow.Visible=cw>=220
-        item.caption.Size=UDim2.new(1,cw>=220 and -80 or -58,1,0)
-    end
-    pages.Home.CanvasSize=UDim2.fromOffset(0,narrow and 384 or heroHeight+78)
+    UI.heroTitle.TextSize=narrow and math.min(36,math.floor((cw-28)/3)) or math.min(50,math.floor(cw*.46/3))
+    UI.heroTitle.Position=UDim2.fromOffset(narrow and 14 or 22,narrow and 4 or 12)
+    UI.heroTitle.Size=UDim2.fromOffset(narrow and cw-36 or math.min(268,cw*.48),narrow and 50 or math.min(96,heroHeight-92))
+    UI.emblemHost.Size=UDim2.fromOffset(narrow and math.min(cw-38,152) or math.min(cw*.43,232),narrow and 104 or heroHeight-24)
+    UI.emblemHost.Position=narrow and UDim2.new(.5,-UI.emblemHost.Size.X.Offset/2,0,54) or UDim2.new(1,-UI.emblemHost.Size.X.Offset-14,0,12)
+    UI.status.Position=UDim2.fromOffset(narrow and 14 or 22,narrow and 172 or heroHeight-84)
+    UI.status.Size=UDim2.fromOffset(narrow and cw-28 or math.min(206,cw*.46),58)
+    local compact=narrow and cw<185
+    UI.statusLabel.Size=UDim2.fromOffset(compact and 46 or 62,26)
+    UI.versionLabel.Size=UDim2.fromOffset(compact and 46 or 62,26)
+    UI.statusLabel.TextSize=compact and 15 or 17;UI.versionLabel.TextSize=compact and 15 or 17
+    UI.statusDot.Visible=not compact
+    UI.statusValue.Position=UDim2.fromOffset(compact and 52 or 82,0)
+    UI.statusValue.Size=UDim2.new(1,compact and -52 or -82,0,26)
+    UI.statusValue.TextSize=compact and 15 or 17
+    UI.versionValue.Position=UDim2.fromOffset(compact and 52 or 71,29)
+    UI.versionValue.Size=UDim2.new(1,compact and -52 or -71,0,26)
+    pages.Home.CanvasSize=UDim2.fromOffset(0,heroHeight+10)
     UI.gui:SetAttribute("NavigationStep",step)
     applyPane();applyPage()
     -- Resize adapts dimensions only. It never forces a dragged position on-screen.
@@ -779,8 +830,6 @@ local function selectPage(name,toggle)
     setPane(true)
 end
 for name,n in pairs(navigation) do connect(n.button.Activated,function() selectPage(name,true) end) end
-connect(UI.openMain.Activated,function() selectPage("Main",false) end)
-for name,item in pairs(UI.shortcuts) do connect(item.button.Activated,function() selectPage(name,false) end) end
 connect(UI.Collapse.Activated,function() setPane(not state.paneOpen) end)
 
 -- Only the requested view extends to the right; folding leaves the dock alone.
@@ -864,34 +913,39 @@ end)
 
 -- Original logos/controls, supplied option icons/background and shared fire sprite.
 -- The previous wordmark PNG remains in the repository but is no longer loaded.
--- Custom PNGs need the executor's local asset API; failure never blocks the GUI.
+-- Custom artwork needs the executor's local asset API; failure never blocks the GUI.
 local ASSETS={
     IconHome={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-home-v1.png",file="ReyznX-icon-home-v1.png",bytes=1933132,images=artworkImages.IconHome},
     IconMain={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-main-v1.png",file="ReyznX-icon-main-v1.png",bytes=2142879,images=artworkImages.IconMain},
+    IconVisuals={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-visuals-v1.png",file="ReyznX-icon-visuals-v1.png",bytes=1628114,images=artworkImages.IconVisuals},
     IconScripts={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-scripts-v1.png",file="ReyznX-icon-scripts-v1.png",bytes=2546120,images=artworkImages.IconScripts},
     IconSettings={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-settings-v1.png",file="ReyznX-icon-settings-v1.png",bytes=1892474,images=artworkImages.IconSettings},
-    Background={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/background-cyber-v1.png",file="ReyznX-background-cyber-v1.png",bytes=167325,images=artworkImages.Background},
+    Background={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/background-cyber-v2.jpg",file="ReyznX-background-cyber-v2.jpg",bytes=167325,format="jpeg",images=artworkImages.Background},
     R={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/launcher-r-v1.png",file="ReyznX-launcher-r-v1.png",bytes=2136070,images={UI.launcherImage,UI.recoveryImage}},
-    X={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/emblem-x-v1.png",file="ReyznX-emblem-x-v1.png",bytes=1699126,images={UI.xImage,UI.xGlow}},
+    X={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/emblem-x-v1.png",file="ReyznX-emblem-x-v1.png",bytes=1699126,images=artworkImages.Emblem},
     Fire={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/flame-wisp-v1.png",file="ReyznX-flame-wisp-v1.png",bytes=1172326,images=VFX.images},
     Minimize={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/minimize-v1.png",file="ReyznX-minimize-v1.png",bytes=1283532,images={controlArtwork.Minimize.image,controlArtwork.Minimize.glow},rect={Vector2.new(260,101),Vector2.new(1253,680)}},
     Collapse={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/collapse-v1.png",file="ReyznX-collapse-v1.png",bytes=1337784,images={controlArtwork.Collapse.image,controlArtwork.Collapse.glow},rect={Vector2.new(254,103),Vector2.new(1268,683)}},
     Close={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/close-v1.png",file="ReyznX-close-v1.png",bytes=1570916,images={controlArtwork.Close.image,controlArtwork.Close.glow},rect={Vector2.new(187,84),Vector2.new(1401,713)}},
 }
-local function validPng(body,asset)
-    return type(body)=="string" and #body==asset.bytes and body:sub(1,8)=="\137PNG\13\10\26\10" and body:sub(13,16)=="IHDR" and body:sub(-8,-5)=="IEND"
+local function validArtwork(body,asset)
+    if type(body)~="string" or #body~=asset.bytes then return false end
+    -- The supplied background was named .png but contains original JPEG bytes.
+    -- Validate its real format; never silently reject it as a malformed PNG.
+    if asset.format=="jpeg" then return body:sub(1,3)=="\255\216\255" and body:sub(-2)=="\255\217" end
+    return body:sub(1,8)=="\137PNG\13\10\26\10" and body:sub(13,16)=="IHDR" and body:sub(-8,-5)=="IEND"
 end
 local function loadAsset(key,asset)
     local customAsset=getcustomasset or getsynasset
     if type(customAsset)~="function" or type(writefile)~="function" then
         UI.gui:SetAttribute("Asset"..key,"unavailable")
-        warn("Reyzn X: custom PNG artwork requires getcustomasset/getsynasset and writefile.")
+        warn("Reyzn X: custom artwork requires getcustomasset/getsynasset and writefile.")
         return
     end
     local cached=false
     if type(isfile)=="function" and type(readfile)=="function" then
         local ok,body=pcall(function() if isfile(asset.file) then return readfile(asset.file) end end)
-        cached=ok and validPng(body,asset)
+        cached=ok and validArtwork(body,asset)
     end
     local uri
     if cached then local ok,value=pcall(customAsset,asset.file);if ok and type(value)=="string" and value~="" then uri=value end end
@@ -900,7 +954,7 @@ local function loadAsset(key,asset)
             if not state.alive then return end
             local ok,body=pcall(function() return game:HttpGet(asset.url) end)
             if not state.alive then return end
-            if ok and validPng(body,asset) then
+            if ok and validArtwork(body,asset) then
                 local wrote=pcall(writefile,asset.file,body)
                 if wrote then
                     local registered,value=pcall(customAsset,asset.file)
@@ -911,9 +965,9 @@ local function loadAsset(key,asset)
         end
     end
     if not state.alive then return end
-    if not uri then UI.gui:SetAttribute("Asset"..key,"failed");warn("Reyzn X: could not load the "..key.." PNG.");return end
+    if not uri then UI.gui:SetAttribute("Asset"..key,"failed");warn("Reyzn X: could not load the "..key.." artwork.");return end
     for _,o in ipairs(asset.images) do
-        -- Use only the visible artwork region; original PNG bytes are unchanged.
+        -- Use only the visible artwork region; original image bytes are unchanged.
         if asset.rect then o.ImageRectOffset=asset.rect[1];o.ImageRectSize=asset.rect[2] end
         o.Image=uri
     end
@@ -995,8 +1049,8 @@ connect(RunService.Heartbeat,function(dt)
         end
     end
     if state.page=="Home" and state.paneOpen then
-        alpha(UI.xGlow,"ImageTransparency",.91-.06*pulse)
-        UI.heroGlint.Position=UDim2.new(.5+.32*math.sin(p*.38),-40,0,0)
+        UI.emblemNeon:update(p,state.burst)
+        alpha(UI.statusDot,"BackgroundTransparency",.08+.12*pulse)
     end
 end)
 return UI.gui

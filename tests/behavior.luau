@@ -5,9 +5,10 @@ return function(source)
     local function png(bytes) return '\137PNG\13\10\26\10'..'\0\0\0\13IHDR'..string.rep('a',bytes-24)..'IEND\174\66\96\130' end
     local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['flame-wisp-v1.png']=png(1172326),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
     for name,bytes in pairs({['icon-home-v1.png']=1933132,['icon-main-v1.png']=2142879,
-        ['icon-scripts-v1.png']=2546120,['icon-settings-v1.png']=1892474,['background-cyber-v1.png']=167325}) do
+        ['icon-scripts-v1.png']=2546120,['icon-settings-v1.png']=1892474,['icon-visuals-v1.png']=1628114}) do
         artwork[name]=png(bytes)
     end
+    artwork['background-cyber-v2.jpg']='\255\216\255\224'..string.rep('a',167325-6)..'\255\217'
     local function setup(width,height)
         local w=newWorld();w.viewport={X=width or 1280,Y=height or 720}
         for name,data in pairs(artwork) do w.http[URL..name]=data end
@@ -33,7 +34,7 @@ return function(source)
     end
     test('clean interface, retained identity and native Rajdhani option labels',function()
         local w,gui=launch();w.step(30)
-        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.3.0')
+        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='1.0')
         assert(find(gui,'UserID').Text=='ID  123' and find(gui,'SessionTime').Text=='00:00:00')
         assert(w.thumbnailRequest.id==123 and w.thumbnailRequest.kind.Name=='HeadShot')
         assert(find(gui,'Avatar').Image=='rbxthumb://test-avatar')
@@ -56,7 +57,7 @@ return function(source)
     end)
     test('supplied PNGs load once, register locally and preserve transparency',function()
         local w,gui=launch();w.step(30)
-        assert(#w.requests==11 and #w.writes==11)
+        assert(#w.requests==12 and #w.writes==12)
         assert(w.files['ReyznX-launcher-r-v1.png']==artwork['launcher-r-v1.png'])
         assert(w.files['ReyznX-emblem-x-v1.png']==artwork['emblem-x-v1.png'])
         assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png')
@@ -68,7 +69,7 @@ return function(source)
         click(gui,'Minimize');w.step(30)
         assert(find(gui,'LauncherR').ImageTransparency==0 and find(gui,'Launcher').BackgroundTransparency==1)
         local again=w.run(source);w.step(30)
-        assert(gui.Parent==nil and #w.requests==11 and #w.writes==11,'valid cache was downloaded again')
+        assert(gui.Parent==nil and #w.requests==12 and #w.writes==12,'valid cache was downloaded again')
         close(w,again)
     end)
     test('only selected section opens to the right; dock works on its own',function()
@@ -91,7 +92,7 @@ return function(source)
         end
         near(dock.AbsolutePosition.X,dockX)
         click(gui,'Tab_Scripts');w.step(30);assert(not find(gui,'PanelReveal').Visible)
-        click(gui,'Tab_Home');w.step(30);click(gui,'OpenMain');w.step(30)
+        click(gui,'Tab_Home');w.step(30);click(gui,'Tab_Main');w.step(30)
         assert(gui:GetAttribute('Page')=='Main' and find(gui,'Page_Main').Visible)
         close(w,gui)
     end)
@@ -210,11 +211,17 @@ return function(source)
             local header=find(gui,'Header');local id=find(gui,'UserID');local clock=find(gui,'SessionTime')
             assert(id.Position.X.Offset+id.Size.X.Offset<=header.Size.X.Offset+panel.Size.X.Offset+1,'ID cut off')
             if id.Position.Y.Offset==clock.Position.Y.Offset then assert(id.Position.X.Offset+id.Size.X.Offset<clock.Position.X.Offset) end
-            local last=find(gui,'Shortcut_Visuals')
-            assert(find(gui,'Page_Home').CanvasSize.Y.Offset>=last.Position.Y.Offset+last.Size.Y.Offset)
-            if size[1]==844 then
-                local main=find(gui,'OpenMain');local content=find(gui,'Content')
-                assert(main.AbsolutePosition.Y+main.AbsoluteSize.Y<=content.AbsolutePosition.Y+content.AbsoluteSize.Y,'main action clipped in landscape')
+            local hero=find(gui,'Hero');local info=find(gui,'ScriptInfo')
+            assert(find(gui,'Page_Home').CanvasSize.Y.Offset>=hero.Position.Y.Offset+hero.Size.Y.Offset)
+            assert(info.Position.Y.Offset+info.Size.Y.Offset<hero.Size.Y.Offset,'status below card')
+            assert(info.Position.X.Offset+info.Size.X.Offset<=hero.Size.X.Offset+find(gui,'Content').AbsoluteSize.X+.01,'info exceeds card width')
+            for _,name in ipairs({'StatusValue','VersionValue'}) do
+                local value=find(gui,name)
+                assert(value.Size.X.Offset+info.AbsoluteSize.X>=28,'status/version too narrow')
+            end
+            if size[1]==844 or size[1]==390 or size[1]==320 then
+                local content=find(gui,'Content')
+                assert(info.AbsolutePosition.Y+info.AbsoluteSize.Y<=content.AbsolutePosition.Y+content.AbsoluteSize.Y,'status clipped in landscape')
             end
             click(gui,'Tab_Visuals');w.step(30);assert(find(gui,'Content').AbsoluteSize.Y>35)
             w.viewport={X=size[2],Y=size[1]};find(gui,'SafeArea'):GetPropertyChangedSignal('AbsoluteSize'):Fire();w.step(30)
@@ -237,7 +244,7 @@ return function(source)
         local broken=setup();broken.http[URL..'emblem-x-v1.png']='<html>not an image</html>'
         local g=broken.run(source);broken.step(90)
         assert(g:GetAttribute('AssetX')=='failed' and find(g,'XFallback').Visible)
-        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==12)
+        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==13)
         click(g,'Tab_Main');broken.step(30);assert(g:GetAttribute('Page')=='Main');close(broken,g)
     end)
     test('missing asset APIs/network/write errors leave controls and clock usable',function()
@@ -249,7 +256,7 @@ return function(source)
             else w.assetApiFailure=true end
             local gui=w.run(source);w.step(100)
             assert(find(gui,'XFallback').Visible and gui:GetAttribute('ElapsedSeconds')>=1)
-            assert(#w.requests<=22,'unbounded retries')
+            assert(#w.requests<=24,'unbounded retries')
             click(gui,'Minimize');w.step(30);assert(find(gui,'Launcher').Visible)
             click(gui,'Launcher');w.step(30);assert(find(gui,'Dock').BackgroundTransparency==0)
             close(w,gui)
@@ -269,7 +276,7 @@ return function(source)
         local w,gui=launch();w.step(30)
         for _,name in ipairs({'BrandText','HeroTitle'}) do
             local title=find(gui,name)
-            assert(title.ClassName=='TextLabel' and title.Text:gsub('<.->','')=='Reyzn X' and title.RichText)
+            assert(title.ClassName=='TextLabel' and title.Text=='Reyzn' and not title.RichText)
             assert(title.Font.Name=='GrenzeGotisch' and title.TextTransparency==0)
             assert(title:FindFirstChildOfClass('UIGradient') and title:FindFirstChildOfClass('UIStroke'))
         end
@@ -363,7 +370,7 @@ return function(source)
     end)
     test('supplied icons map correctly; exact transparencies survive reversed transitions',function()
         local w,gui=launch();w.step(30)
-        for _,name in ipairs({'Home','Main','Scripts','Settings'}) do
+        for _,name in ipairs({'Home','Main','Visuals','Scripts','Settings'}) do
             local tab=find(gui,'Tab_'..name)
             local art=find(tab,'OptionArtwork')
             assert(art.Image=='mock://ReyznX-icon-'..name:lower()..'-v1.png')
@@ -371,18 +378,16 @@ return function(source)
             assert(art.ScaleType.Name=='Fit' and not art.Active)
             assert(not art.Parent:FindFirstChild('Line').Visible,'native icon overlaps PNG')
         end
-        assert(not find(gui,'Tab_Visuals'):FindFirstChild('OptionArtwork',true),'invented a fifth icon')
-        assert(find(find(gui,'Shortcut_Main'),'OptionArtwork').Image=='mock://ReyznX-icon-main-v1.png')
         assert(not find(gui,'Launcher'):FindFirstChildOfClass('UIStroke'))
         for cycle=1,5 do
             click(gui,'Minimize');w.step(cycle%2==0 and 6 or 30)
             click(gui,'Launcher');w.step(30)
             click(gui,'Collapse');w.step(5);click(gui,'Tab_Main');w.step(30)
             near(find(find(gui,'Tab_Main'),'OptionArtwork').ImageTransparency,.85)
-            for _,surface in ipairs({'Dock','Panel'}) do
+            for _,surface in ipairs({'Dock','Panel','Hero'}) do
                 local bg=find(find(gui,surface),'InterfaceBackground')
-                assert(bg.Image=='mock://ReyznX-background-cyber-v1.png' and bg.ScaleType.Name=='Crop')
-                near(bg.ImageTransparency,.76);assert(not bg.Active)
+                assert(bg.Image=='mock://ReyznX-background-cyber-v2.jpg' and bg.ScaleType.Name=='Crop')
+                near(bg.ImageTransparency,.83);assert(not bg.Active)
             end
         end
         close(w,gui)
@@ -421,6 +426,69 @@ return function(source)
             end
         end
         close(w,gui)
+    end)
+    test('Home retains the large X, removes only requested actions and fixes version at 1.0',function()
+        local w,gui=launch();w.step(30)
+        for _,name in ipairs({'OpenMain','Shortcut_Main','Shortcut_Visuals','SilverAccent','HeroGlint'}) do
+            assert(not gui:FindFirstChild(name,true),'removed Home element survived: '..name)
+        end
+        assert(find(gui,'BrandText').Text=='Reyzn' and find(gui,'HeroTitle').Text=='Reyzn')
+        assert(find(gui,'Credit').Text=='Made By Reyzn')
+        assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png')
+        assert(find(gui,'StatusValue').Text=='Active' and gui:GetAttribute('ScriptStatus')=='Active')
+        assert(find(gui,'VersionValue').Text=='1.0' and gui:GetAttribute('Version')=='1.0')
+        assert(find(gui,'Tab_Main') and find(gui,'Tab_Visuals'),'sidebar actions removed')
+        for _,name in ipairs({'Main','Visuals','Home'}) do click(gui,'Tab_'..name);w.step(30) end
+        click(gui,'Minimize');w.step(30);click(gui,'Launcher');w.step(30)
+        assert(find(gui,'VersionValue').Text=='1.0')
+        local again=w.run(source);w.step(30)
+        assert(find(again,'VersionValue').Text=='1.0' and again:GetAttribute('Version')=='1.0')
+        close(w,again)
+    end)
+    test('actual JPEG background is accepted, cached, and layered below Home content',function()
+        local w,gui=launch();w.step(30)
+        assert(gui:GetAttribute('AssetBackground')=='ready')
+        assert(w.files['ReyznX-background-cyber-v2.jpg']==artwork['background-cyber-v2.jpg'])
+        local assetCount=0
+        for _,parentName in ipairs({'Dock','Panel','Hero'}) do
+            local parent=find(gui,parentName);local bg=parent:FindFirstChild('InterfaceBackground')
+            assert(bg and bg.Image=='mock://ReyznX-background-cyber-v2.jpg')
+            near(bg.ImageTransparency,.83);assert(not bg.Active)
+            for _,name in ipairs({'Navigation','Content','HeroTitle','EmblemHost','ScriptInfo'}) do
+                local child=parent:FindFirstChild(name)
+                if child then assert(child.ZIndex>bg.ZIndex,'background obscures interactive content') end
+            end
+            assetCount+=1
+        end
+        assert(assetCount==3)
+        close(w,gui)
+        local invalid=setup()
+        invalid.http[URL..'background-cyber-v2.jpg']=png(167325)
+        local g=invalid.run(source);invalid.step(100)
+        assert(g:GetAttribute('AssetBackground')=='failed','PNG bytes accepted as supplied JPEG')
+        assert(find(g,'VersionValue').Text=='1.0')
+        click(g,'Tab_Visuals');invalid.step(30);assert(g:GetAttribute('Page')=='Visuals')
+        close(invalid,g)
+    end)
+    test('emblem neon travels left to right, resets invisibly and pauses outside Home',function()
+        local w,gui=launch();w.step(30)
+        local sweep=find(gui,'EmblemSweep');local wash=sweep:FindFirstChildOfClass('UIGradient')
+        local objects=#w.objects;local lastX=wash.Offset.X;local wraps,moves=0,0
+        for i=1,360 do
+            w.step(1)
+            local x=wash.Offset.X
+            if x<lastX then wraps+=1;assert(sweep.ImageTransparency>.99,'neon jumps visibly at loop seam')
+            else moves+=1 end
+            lastX=x
+        end
+        assert(wraps>=1 and moves>350 and #w.objects==objects,'loop reversed, froze or allocated instances')
+        assert(not sweep.Active and sweep.Image==find(gui,'EmblemX').Image)
+        assert(find(gui,'EmblemX').ImageTransparency==0,'original artwork was dimmed')
+        click(gui,'Tab_Visuals');w.step(30);local paused=wash.Offset.X
+        w.step(60);near(wash.Offset.X,paused)
+        click(gui,'Tab_Home');w.step(30);assert(wash.Offset.X~=paused)
+        click(gui,'Minimize');w.step(30);near(sweep.ImageTransparency,1)
+        click(gui,'Launcher');w.step(30);close(w,gui)
     end)
     test('button press scales its face only, retains action and releases owned touch',function()
         local w,gui=launch();w.step(30);local e=w.env
