@@ -198,7 +198,11 @@ local function newWorld()
     services.UserInputService=env.Instance.new('UserInputService');services.UserInputService.TouchEnabled=true
     services.UserInputService.GetFocusedTextBox=function()return nil end
     services.UserInputService.GetMouseLocation=function()return vec.new(500,300)end
-    services.ContentProvider={PreloadAsync=function()end};services.SoundService=env.Instance.new('SoundService')
+    services.ContentProvider={PreloadAsync=function(_,items)
+        if W.preloadDelay then env.task.wait(W.preloadDelay) end
+        if W.assetRenderFailure then error('asset rendering unavailable') end
+        for _,item in ipairs(items) do item.IsLoaded=true end
+    end};services.SoundService=env.Instance.new('SoundService')
     env.workspace=env.Instance.new('Workspace');env.workspace.Name='Workspace';env.workspace.Gravity=196.2
     env.workspace.CurrentCamera=env.Instance.new('Camera');env.workspace.CurrentCamera.ViewportSize=vec.new(1280,720)
     env.workspace.GetPartBoundsInRadius=function()return {}end;env.workspace.GetPartBoundsInBox=function()return {}end;env.workspace.Raycast=function()return nil end
@@ -214,11 +218,23 @@ local function newWorld()
     env.game={PlaceId=189707,JobId='test',GetService=function(_,name)if not services[name]then services[name]=env.Instance.new(name)end;return services[name]end,
         HttpGet=function(_,url)
             W.requests[#W.requests+1]=url
+            if W.httpDelay then env.task.wait(W.httpDelay) end
+            if W.httpFailure then error('network unavailable') end
             local body=W.http[url] or W.http[url:match('^[^?]+')]
             assert(body,url);return body
         end,GetObjects=function()return {}end}
     env.loadstring=function(src)local fn,err=loadstring(src);if fn then setfenv(fn,env)end;return fn,err end
-    env.isfile=function()return true end;env.writefile=function()end;env.getcustomasset=function(path)return 'mock://'..path end
+    W.files={};W.writes={}
+    env.isfile=function(path)return W.files[path]~=nil end
+    env.readfile=function(path)return assert(W.files[path],'missing cached file')end
+    env.writefile=function(path,body)
+        if W.writeFailure then error('write unavailable')end
+        W.files[path]=body;W.writes[#W.writes+1]=path
+    end
+    env.getcustomasset=function(path)
+        if W.assetApiFailure then error('registration unavailable')end
+        assert(W.files[path], 'asset not written');return 'mock://'..path
+    end
     W.env=env;W.services=services;W.player=player;W.pg=pg;W.http={}
     local function renderable(object,isVideo)
         local node=object

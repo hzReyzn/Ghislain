@@ -2,24 +2,31 @@
 
 Made By Reyzn.
 
-GUI de Roblox creado desde cero en la copia de trabajo `hzReyzn/Ghislain`, inspirado en la referencia negra y violeta. `Reyzn X.lua` contiene toda la interfaz y se ejecuta en el cliente.
+GUI de Roblox en la copia de trabajo `hzReyzn/Ghislain`. La versión 2.0 toma la referencia minimalista negra, plateada y violeta: superficies metálicas, bordes nítidos y reflejos suaves. No incluye funciones de juego.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua?revision=reyzn-x-2.0"))()
 ```
 
-- Home, Main, Visuals, Scripts y Settings. Main y Scripts comienzan vacíos.
-- Avatar circular del jugador, UserId y tiempo de sesión `HH:MM:SS`, desde cero en cada ejecución. El contador continúa al minimizar y al reaparecer.
-- Acento Amethyst por defecto; Moonstone y Ember opcionales en Visuals. Halo y animaciones configurables.
-- Ventana flotante más pequeña por defecto, con espacio real para moverla. Se arrastra desde el encabezado; el icono minimizado también se arrastra con ratón o toque. Arrastrar una ventana ampliada la devuelve a tamaño compacto.
-- Menú izquierdo plegable: pulsa el botón de tres líneas para abrirlo hacia la derecha; también admite deslizamiento horizontal sobre sus opciones. Se cierra al elegir una sección o tocar fuera. El menú no agranda la ventana.
-- Transiciones al cambiar de página, indicador de selección móvil, reflejos suaves, iluminación del menú y zoom con desvanecimiento al minimizar/restaurar/cerrar. El efecto respeta el tema y el ajuste de animaciones.
-- Desplazamiento vertical independiente para páginas y navegación. Al volver a una sección se muestra su inicio. `RightShift` también minimiza/restaura.
-- Ventana, iconos, corona y arte abstracto construidos con objetos nativos. La única imagen es el avatar obtenido mediante Roblox.
-- Sin personajes decorativos, Key System, Featured Scripts, Links, Combat, World, Universal ni Player. Sin pantallas de mantenimiento/carga, audio, funciones de juego ni ejecución de scripts externos.
+- Barra lateral con Home, Main, Visuals, Scripts y Settings. Elegir una opción despliega **solamente su panel hacia la derecha**. Pulsar la misma opción o la flecha de plegado deja únicamente la barra lateral.
+- Main, Visuals, Scripts y Settings quedan vacíos para el trabajo posterior. Se eliminaron Themes, los ajustes de tamaño y los textos de relleno.
+- Fuente Builder Sans Medium en las opciones Main, Visuals, Scripts y Settings, sus accesos y sus títulos. Home conserva su fuente anterior.
+- La X de la portada y la R del botón minimizado son los PNG originales suministrados, con su transparencia intacta. Los archivos se guardan sin cambios en `assets/reyzn-x/`.
+- Avatar circular real, UserId y contador `HH:MM:SS`, desde cero por ejecución; el tiempo continúa mientras está plegado o minimizado y después de reaparecer.
+- Arrastre con ratón o toque desde la parte superior de la barra lateral o del panel. El botón R minimizado también se arrastra. **El arrastre permite salir de la pantalla** y no se limita al rectángulo del dispositivo.
+- Si la interfaz queda completamente fuera, aparece una pequeña R en el borde izquierdo para recuperarla. `RightShift` también minimiza/restaura o recupera una interfaz fuera de pantalla.
+- Controles: línea para minimizar a la R, flecha para plegar/desplegar el panel y cruz para cerrar. No hay maximizar ni ajustes manuales de tamaño; la distribución se adapta automáticamente al dispositivo.
+- Desvanecimientos de minimizar, restaurar y cerrar con brillo breve y escala sutil. Una nueva acción sustituye a la transición anterior sin acumular transparencia ni mover la ventana. El cierre es definitivo para esa ejecución.
+- Página Home con desplazamiento vertical cuando falta altura. Deslizar el contenido no arrastra la ventana. Los eventos distinguen el dedo que inició el arrastre.
 
-`hzReyzn/scriptshz` conserva la versión anterior. Este repositorio es el espacio de trabajo para Reyzn X.
+Los PNG se descargan una sola vez desde dos URL fijas de este repositorio y se reutilizan desde caché, validando tamaño, cabecera y final PNG. Necesitan `getcustomasset` (o `getsynasset`) y `writefile` en el entorno de ejecución; `readfile` e `isfile` permiten reutilizar la caché. No son IDs de imágenes subidas a Roblox. Si el entorno no admite estos recursos, se muestran letras R/X de respaldo y el GUI sigue respondiendo. No se ejecuta ningún contenido descargado por el GUI.
+
+El hub original `hzReyzn/scriptshz` permanece intacto. No se incorporaron scripts afiliados, pantallas de mantenimiento o carga, vídeos ni audio.
 
 ## Verificación
 
-`python tests/run.py /ruta/a/luau` compila y ejecuta 12 escenarios en un entorno de Roblox simulado. Incluyen el movimiento real en ambos ejes, arrastre desde tamaño ampliado, menú a mitad de animación y cambios rápidos, gestos táctiles, desplazamiento, tamaño móvil, ciclos de minimizar/restaurar, avatar, contador, temas, reejecución y limpieza. Estas pruebas no sustituyen la comprobación visual en Roblox.
+```sh
+python tests/run.py /ruta/a/luau
+```
+
+El comando compila el script y ejecuta 14 escenarios deterministas: panel independiente, cambios rápidos, arrastre por los cuatro bordes, recuperación, ratón y toque, minimizar repetidamente e interrumpir transiciones, carga/caché/fallos de PNG, contador, avatar, tamaños móviles, reejecución y limpieza de conexiones. Las pruebas usan un entorno simulado; no sustituyen la comprobación del renderizado y los gestos en Roblox y en el ejecutor real.
