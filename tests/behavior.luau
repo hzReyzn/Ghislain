@@ -3,7 +3,7 @@ return function(source)
     local count=0
     local URL='https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/'
     local function png(bytes) return '\137PNG\13\10\26\10'..'\0\0\0\13IHDR'..string.rep('a',bytes-24)..'IEND\174\66\96\130' end
-    local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126)}
+    local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['wordmark-v1.png']=png(1399207),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
     local function setup(width,height)
         local w=newWorld();w.viewport={X=width or 1280,Y=height or 720}
         for name,data in pairs(artwork) do w.http[URL..name]=data end
@@ -29,7 +29,7 @@ return function(source)
     end
     test('clean interface, original requested identity and four font changes',function()
         local w,gui=launch();w.step(30)
-        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.0.0')
+        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.1.0')
         assert(find(gui,'UserID').Text=='ID  123' and find(gui,'SessionTime').Text=='00:00:00')
         assert(w.thumbnailRequest.id==123 and w.thumbnailRequest.kind.Name=='HeadShot')
         assert(find(gui,'Avatar').Image=='rbxthumb://test-avatar')
@@ -51,7 +51,7 @@ return function(source)
     end)
     test('supplied PNGs load once, register locally and preserve transparency',function()
         local w,gui=launch();w.step(30)
-        assert(#w.requests==2 and #w.writes==2)
+        assert(#w.requests==6 and #w.writes==6)
         assert(w.files['ReyznX-launcher-r-v1.png']==artwork['launcher-r-v1.png'])
         assert(w.files['ReyznX-emblem-x-v1.png']==artwork['emblem-x-v1.png'])
         assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png')
@@ -63,7 +63,7 @@ return function(source)
         click(gui,'Minimize');w.step(30)
         assert(find(gui,'LauncherR').ImageTransparency==0 and find(gui,'Launcher').BackgroundTransparency==1)
         local again=w.run(source);w.step(30)
-        assert(gui.Parent==nil and #w.requests==2 and #w.writes==2,'valid cache was downloaded again')
+        assert(gui.Parent==nil and #w.requests==6 and #w.writes==6,'valid cache was downloaded again')
         close(w,again)
     end)
     test('only selected section opens to the right; dock works on its own',function()
@@ -170,7 +170,7 @@ return function(source)
             assert(find(gui,'WindowOpacity').Value==1 and find(gui,'WindowZoom').Value==1)
             assert(find(gui,'Dock').BackgroundTransparency==0 and find(gui,'Panel').BackgroundTransparency==0)
             assert(find(gui,'EmblemX').ImageTransparency==0,'artwork became progressively faint')
-            assert(find(gui,'HeroTitle').TextTransparency==0,'text became progressively faint')
+            assert(find(gui,'HeroTitle').ImageTransparency==0,'wordmark became progressively faint')
             assert(find(gui,'Window').Visible and not find(gui,'Launcher').Visible)
             near(find(gui,'Window').Position.X.Offset,x);near(find(gui,'Window').Position.Y.Offset,y)
         end
@@ -232,7 +232,7 @@ return function(source)
         local broken=setup();broken.http[URL..'emblem-x-v1.png']='<html>not an image</html>'
         local g=broken.run(source);broken.step(90)
         assert(g:GetAttribute('AssetX')=='failed' and find(g,'XFallback').Visible)
-        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==3)
+        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==7)
         click(g,'Tab_Main');broken.step(30);assert(g:GetAttribute('Page')=='Main');close(broken,g)
     end)
     test('missing asset APIs/network/write errors leave controls and clock usable',function()
@@ -244,7 +244,7 @@ return function(source)
             else w.assetApiFailure=true end
             local gui=w.run(source);w.step(100)
             assert(find(gui,'XFallback').Visible and gui:GetAttribute('ElapsedSeconds')>=1)
-            assert(#w.requests<=4,'unbounded retries')
+            assert(#w.requests<=12,'unbounded retries')
             click(gui,'Minimize');w.step(30);assert(find(gui,'Launcher').Visible)
             click(gui,'Launcher');w.step(30);assert(find(gui,'Dock').BackgroundTransparency==0)
             close(w,gui)
@@ -258,6 +258,75 @@ return function(source)
         assert(gui.Parent==nil and #w.writes==0 and w.services.RunService.Heartbeat:Count()==0)
         local failed=setup();failed.thumbnailFailure=true
         local g=failed.run(source);failed.step(60);assert(find(g,'AvatarFallback').Visible);close(failed,g)
+    end)
+
+    test('wordmark replaces both brand texts; credit and option fonts stay intact',function()
+        local w,gui=launch();w.step(30)
+        assert(find(gui,'BrandWordmark').Image=='mock://ReyznX-wordmark-v1.png')
+        assert(find(gui,'HeroTitle').Image==find(gui,'BrandWordmark').Image)
+        assert(find(gui,'BrandWordmark').ImageRectOffset.Y==170 and find(gui,'HeroTitle').ImageRectSize.X==1672)
+        assert(not find(gui,'BrandFallback').Visible and not find(gui,'HeroTitleFallback').Visible)
+        assert(find(gui,'Credit').Text=='Made By Reyzn' and find(gui,'Credit').ClassName=='TextLabel')
+        assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png','existing X emblem was replaced')
+        for _,name in ipairs({'Main','Visuals','Scripts','Settings'})do assert(find(gui,'Tab_'..name):FindFirstChild('Caption').Font.Name=='BuilderSansMedium')end
+        close(w,gui)
+    end)
+    test('PNG controls map to their actions, retain hitboxes and release press feedback',function()
+        local w,gui=launch();w.step(30);local e=w.env
+        for _,name in ipairs({'Minimize','Collapse','Close'})do
+            local b=find(gui,name);local art=b:FindFirstChild('ControlArtwork')
+            assert(b.ClassName=='ImageButton' and b.Active and b.BackgroundTransparency==1)
+            assert(art.Image=='mock://ReyznX-'..string.lower(name)..'-v1.png')
+            assert(art.ImageRectOffset.X>180 and art.ImageRectSize.X>1200,'transparent margin not trimmed in display')
+            assert(not b:FindFirstChild('ControlFallback').Visible)
+            local x,y=b.Position.X.Offset,b.Position.Y.Offset
+            local scale=art:FindFirstChildOfClass('UIScale')
+            local touch={UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(0,0)}
+            b.InputBegan:Fire(touch);w.step(6);near(scale.Scale,.93)
+            w.services.UserInputService.InputEnded:Fire({UserInputType=e.Enum.UserInputType.Touch})
+            w.step(12);near(scale.Scale,.93,'unrelated finger released control')
+            w.services.UserInputService.InputEnded:Fire(touch);w.step(12);near(scale.Scale,1)
+            near(b.Position.X.Offset,x);near(b.Position.Y.Offset,y)
+        end
+        click(gui,'Collapse');w.step(30);assert(not gui:GetAttribute('PanelOpen') and not gui:GetAttribute('Minimized'))
+        click(gui,'Collapse');w.step(30);assert(gui:GetAttribute('PanelOpen'))
+        click(gui,'Minimize');w.step(30);assert(gui:GetAttribute('Minimized') and gui.Parent~=nil)
+        click(gui,'Launcher');w.step(30);close(w,gui)
+    end)
+    test('pooled aura extends outside the frame, tracks folding and fades with its owner',function()
+        local w,gui=launch();w.step(30)
+        local dock,panel,launcher=find(gui,'DockAura'),find(gui,'PanelAura'),find(gui,'LauncherAura')
+        assert(dock.Parent==find(gui,'Window') and panel.Parent==find(gui,'Window'))
+        assert(not panel:IsDescendantOf(find(gui,'PanelReveal')),'aura clipped by reveal')
+        assert(launcher.Parent==find(gui,'Launcher'))
+        local total=0
+        for _,aura in ipairs({dock,panel,launcher}) do
+            assert(not aura.Active and not aura.ClipsDescendants)
+            local sides={}
+            for _,o in ipairs(aura:GetDescendants())do
+                if o:IsA('Frame') then assert(o.Active==false,'VFX can capture input')end
+                if o.Name=='AuraWisp' then
+                    total+=1
+                    local p=o.Position;local size=aura.Size
+                    if p.Y.Offset<0 then sides.top=true end
+                    if p.Y.Offset>size.Y.Offset then sides.bottom=true end
+                    if p.X.Offset<0 then sides.left=true end
+                    if p.X.Offset>size.X.Offset then sides.right=true end
+                end
+            end
+            if aura~=launcher then assert(sides.top and sides.bottom and sides.left and sides.right)end
+        end
+        assert(total==44,'unbounded aura pool')
+        local plume=dock:FindFirstChild('AuraWisp');local x,y=plume.Position.X.Offset,plume.Position.Y.Offset
+        local objects=#w.objects;w.step(120)
+        assert(#w.objects==objects,'aura allocates instances each frame')
+        assert(plume.Position.X.Offset~=x or plume.Position.Y.Offset~=y,'frozen aura')
+        click(gui,'Collapse');w.step(30);assert(not panel.Visible)
+        click(gui,'Tab_Main');w.step(30);assert(panel.Visible)
+        click(gui,'Minimize');w.step(30);assert(plume.BackgroundTransparency==1,'window aura remained after minimizing')
+        local lp=launcher:FindFirstChild('AuraWisp');assert(lp.Position.Y.Offset<0 and lp.BackgroundTransparency<1)
+        click(gui,'Launcher');w.step(30);assert(lp.BackgroundTransparency==1,'logo aura remained after restoration')
+        close(w,gui);assert(w.services.RunService.Heartbeat:Count()==0)
     end)
     print(tostring(count)..' scenarios passed. Rendering and real touch input still require Roblox.')
 end

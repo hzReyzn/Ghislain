@@ -1,5 +1,5 @@
 -- Reyzn X | Made By Reyzn
--- Client GUI only. The two fixed HTTP resources below are PNG artwork, never code.
+-- Client GUI only. The fixed HTTP resources below are PNG artwork, never code.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -12,14 +12,14 @@ local playerGui = player:WaitForChild("PlayerGui")
 local previous = playerGui:FindFirstChild("ReyznX")
 if previous then previous:Destroy() end
 
-local VERSION = "2.0.0"
+local VERSION = "2.1.0"
 local C = {
     base=Color3.fromRGB(10,10,15), panel=Color3.fromRGB(16,15,23),
     black=Color3.fromRGB(8,8,12), steel=Color3.fromRGB(71,68,85),
     silver=Color3.fromRGB(217,219,233), white=Color3.fromRGB(245,244,251),
     muted=Color3.fromRGB(184,181,201), line=Color3.fromRGB(66,59,85),
     violet=Color3.fromRGB(157,103,239), light=Color3.fromRGB(213,181,255),
-    deep=Color3.fromRGB(60,31,99), green=Color3.fromRGB(132,225,179),
+    deep=Color3.fromRGB(60,31,99), green=Color3.fromRGB(132,225,179), ice=Color3.fromRGB(180,207,255),
 }
 local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
@@ -188,9 +188,11 @@ local function surface(parent,name,pos,size,scope)
     return o,{glow=glow,edge=edge,metal=metal,beam=beam,beamGradient=beamGradient}
 end
 UI.dock,UI.dockFx=surface(UI.window,"Dock",UDim2.fromOffset(0,0),UDim2.fromOffset(170,420))
+UI.dock.ZIndex=2
 UI.dockCrown=icon(UI.dock,"crown",UDim2.fromOffset(17,20),24,C.light)
-UI.brand=label(UI.dock,"Brand","Reyzn <font color=\"rgb(188,141,255)\">X</font>",UDim2.fromOffset(49,13),UDim2.fromOffset(110,36),22,C.white,Enum.Font.GothamBold)
-UI.brand.RichText=true
+UI.brandFallback=label(UI.dock,"BrandFallback","Reyzn <font color=\"rgb(188,141,255)\">X</font>",UDim2.fromOffset(49,13),UDim2.fromOffset(110,36),22,C.white,Enum.Font.GothamBold)
+UI.brandFallback.RichText=true
+UI.brand=imageLabel(UI.dock,"BrandWordmark",UDim2.fromOffset(46,8),UDim2.fromOffset(116,48))
 UI.dragArea=frame(UI.dock,"DragArea",UDim2.fromOffset(0,0),UDim2.new(1,0,0,60),nil,1)
 UI.dragArea.Active=true;UI.dragArea.ZIndex=5
 UI.dockDivider=frame(UI.dock,"Divider",UDim2.fromOffset(14,62),UDim2.new(1,-28,0,1),C.line,.25)
@@ -210,13 +212,37 @@ end
 UI.selectionLight=frame(UI.nav,"SelectionLight",UDim2.fromOffset(0,12),UDim2.fromOffset(2,18),C.white,0)
 UI.selectionLight.ZIndex=4;corner(UI.selectionLight,2)
 UI.controls=frame(UI.dock,"WindowControls",UDim2.new(0,12,1,-50),UDim2.new(1,-24,0,36),nil,1)
+local controlArtwork={}
 for i,data in ipairs({{"Minimize","minimize"},{"Collapse","fold"},{"Close","close"}}) do
-    local b=button(UI.controls,data[1],UDim2.fromOffset((i-1)*46,0),UDim2.fromOffset(40,36))
-    local glyph=icon(b,data[2],UDim2.fromOffset(9,7),22,C.silver)
+    local b=make("ImageButton",UI.controls,{Name=data[1],Image="",BackgroundTransparency=1,Position=UDim2.fromOffset((i-1)*46,0),Size=UDim2.fromOffset(40,36),AutoButtonColor=false,Active=true,Selectable=true})
+    local fallback=frame(b,"ControlFallback",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1))
+    corner(fallback,10);gradient(fallback,metallicColors,105);stroke(fallback,C.silver,.6)
+    local glyph=icon(fallback,data[2],UDim2.fromOffset(9,7),22,C.silver)
     if data[1]=="Collapse" then UI.foldIcon=glyph end
+    local glow=imageLabel(b,"ControlGlow",UDim2.fromScale(.5,.5),UDim2.new(1,8,1,6))
+    glow.AnchorPoint=Vector2.new(.5,.5);glow.ImageColor3=C.ice;alpha(glow,"ImageTransparency",.95)
+    local art=imageLabel(b,"ControlArtwork",UDim2.fromScale(.5,.5),UDim2.new(1,4,1,0))
+    art.AnchorPoint=Vector2.new(.5,.5)
+    local artScale=make("UIScale",art,{Scale=1})
+    local record={image=art,glow=glow,fallback=fallback,glyph=glyph,scale=artScale,pressed=false,hover=false}
+    controlArtwork[data[1]]=record
+    connect(b.MouseEnter,function() record.hover=true;alpha(glow,"ImageTransparency",.76);if not record.pressed then tween(artScale,.14,{Scale=1.06}) end end)
+    connect(b.MouseLeave,function() record.hover=false;alpha(glow,"ImageTransparency",.95);if not record.pressed then tween(artScale,.18,{Scale=1}) end end)
+    connect(b.InputBegan,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            record.pressed=true;record.pointer=input;tween(artScale,.08,{Scale=.93});alpha(glow,"ImageTransparency",.65)
+        end
+    end)
+    connect(Input.InputEnded,function(input)
+        if record.pressed and (input==record.pointer or (record.pointer.UserInputType==Enum.UserInputType.MouseButton1 and input.UserInputType==Enum.UserInputType.MouseButton1)) then
+            record.pressed=false;record.pointer=nil;tween(artScale,.16,{Scale=record.hover and 1.06 or 1});alpha(glow,"ImageTransparency",record.hover and .76 or .95)
+        end
+    end)
+    connect(Input.WindowFocusReleased,function() record.pressed=false;record.pointer=nil;tween(artScale,.16,{Scale=1}) end)
     UI[data[1]]=b
 end
 UI.reveal=frame(UI.window,"PanelReveal",UDim2.fromOffset(180,0),UDim2.fromOffset(700,420),nil,1,"pane")
+UI.reveal.ZIndex=2
 UI.reveal.ClipsDescendants=true
 UI.panel,UI.panelFx=surface(UI.reveal,"Panel",UDim2.fromOffset(4,4),UDim2.fromOffset(692,412))
 UI.header=frame(UI.panel,"Header",UDim2.fromOffset(20,8),UDim2.new(1,-40,0,58),nil,1)
@@ -251,8 +277,9 @@ end
 UI.hero=frame(pages.Home,"Hero",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,200),Color3.new(1,1,1))
 corner(UI.hero,13);stroke(UI.hero,C.violet,.62)
 gradient(UI.hero,{Color3.fromRGB(28,22,40),C.black,Color3.fromRGB(26,17,39)},32)
-UI.heroTitle=label(UI.hero,"HeroTitle","Reyzn <font color=\"rgb(188,141,255)\">X</font>",UDim2.fromOffset(22,32),UDim2.fromOffset(236,52),32,C.white,Enum.Font.GothamBold)
-UI.heroTitle.RichText=true
+UI.heroTitleFallback=label(UI.hero,"HeroTitleFallback","Reyzn <font color=\"rgb(188,141,255)\">X</font>",UDim2.fromOffset(22,32),UDim2.fromOffset(236,52),32,C.white,Enum.Font.GothamBold)
+UI.heroTitleFallback.RichText=true
+UI.heroTitle=imageLabel(UI.hero,"HeroTitle",UDim2.fromOffset(20,10),UDim2.fromOffset(268,100))
 UI.heroUnderline=frame(UI.hero,"SilverAccent",UDim2.fromOffset(24,94),UDim2.fromOffset(46,2),C.silver,.08)
 gradient(UI.heroUnderline,{C.light,C.silver,C.deep},0)
 UI.openMain=button(UI.hero,"OpenMain",UDim2.fromOffset(22,128),UDim2.fromOffset(154,42))
@@ -280,6 +307,7 @@ UI.launcherScale=make("UIScale",UI.launcher,{Scale=.92})
 UI.rFallback=label(UI.launcher,"RFallback","R",UDim2.fromScale(0,0),UDim2.fromScale(1,1),34,C.white,Enum.Font.GothamBold)
 UI.rFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.launcherImage=imageLabel(UI.launcher,"LauncherR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
+UI.launcherImage.ZIndex=2;UI.rFallback.ZIndex=2
 UI.launcherHalo=frame(UI.launcher,"LauncherHalo",UDim2.fromOffset(3,3),UDim2.new(1,-6,1,-6),nil,1)
 corner(UI.launcherHalo,16);UI.launcherRim=stroke(UI.launcherHalo,C.violet,.65,2)
 gradient(UI.launcherRim,{C.violet,C.silver,C.deep},30)
@@ -289,6 +317,67 @@ UI.recoveryFallback=label(UI.recovery,"RecoveryFallback","R",UDim2.fromScale(0,0
 UI.recoveryFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.recoveryImage=imageLabel(UI.recovery,"RecoveryR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
 
+-- A small reusable pool of native UI wisps. No per-frame instances, textures,
+-- particle emitters or fullscreen post-processing. The panel aura is a sibling
+-- of the clipped reveal, so its light can extend OUTSIDE the visible frame.
+local function createAura(parent,name,scope,counts,small)
+    local host=frame(parent,name,UDim2.fromOffset(0,0),UDim2.fromOffset(100,100),nil,1,scope)
+    host.ZIndex=0;host.Active=false;host.ClipsDescendants=false
+    local aura={host=host,rings={},wisps={},small=small}
+    for i,spread in ipairs(small and {2,4,6,9,13,18} or {2,5,9,14,20,27}) do
+        local ring=frame(host,"AuraHalo",UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),nil,1)
+        ring.Active=false;corner(ring,16+spread)
+        local edge=stroke(ring,i<=2 and C.silver or (i<=4 and C.ice or C.violet),.9,small and 4 or 7)
+        local color=gradient(edge,{C.violet,C.ice,C.white,C.light,C.violet},25+i*35)
+        aura.rings[#aura.rings+1]={edge=edge,color=color,index=i}
+    end
+    for side,count in ipairs(counts) do
+        for index=1,count do
+            local plume=frame(host,"AuraWisp",UDim2.fromOffset(0,0),UDim2.fromOffset(8,24),C.ice,.9)
+            plume.Active=false;plume.AnchorPoint=Vector2.new(.5,.5);corner(plume,100)
+            local wash=gradient(plume,{C.violet,C.ice,C.white},90)
+            wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.3,.4),NumberSequenceKeypoint.new(.65,.05),NumberSequenceKeypoint.new(1,1)})
+            local core=frame(plume,"AuraCore",UDim2.fromScale(.5,.55),UDim2.fromScale(.23,.78),C.white,.65)
+            core.Active=false;core.AnchorPoint=Vector2.new(.5,.5);corner(core,100)
+            local coreGradient=gradient(core,{C.ice,C.white},90);fadeGradient(coreGradient)
+            aura.wisps[#aura.wisps+1]={plume=plume,core=core,side=side,fraction=(index-.5)/count,seed=side*.173+index*.319}
+        end
+    end
+    return aura
+end
+local function animateAura(aura,phase,burst)
+    local w,h=aura.host.Size.X.Offset,aura.host.Size.Y.Offset
+    if w<1 or h<1 then return end
+    for _,ring in ipairs(aura.rings) do
+        local pulse=.5+.5*math.sin(phase*1.7-ring.index*.7)
+        alpha(ring.edge,"Transparency",math.clamp(.79+ring.index*.029-pulse*.025-burst*.06,.65,.985))
+        ring.color.Offset=Vector2.new(math.sin(phase*.45+ring.index)*.28,0)
+    end
+    for _,item in ipairs(aura.wisps) do
+        local travel=(phase*(.25+item.seed%0.13)+item.seed)%1
+        local envelope=math.sin(travel*math.pi)^1.4
+        local scale=aura.small and .54 or 1
+        local length=(15+travel*17+math.sin(phase*2.2+item.seed)*3)*scale
+        local distance=(1+travel*4)*scale+length*.5
+        local sway=math.sin(phase*1.9+item.seed*9)*4*scale
+        local side=item.side
+        local x,y,rotation
+        if side==1 then x=w*item.fraction+sway;y=-distance;rotation=0
+        elseif side==2 then x=w+distance;y=h*item.fraction+sway;rotation=90
+        elseif side==3 then x=w*item.fraction+sway;y=h+distance;rotation=180
+        else x=-distance;y=h*item.fraction+sway;rotation=-90 end
+        item.plume.Position=UDim2.fromOffset(x,y)
+        item.plume.Size=UDim2.fromOffset((6+envelope*5)*scale,length)
+        item.plume.Rotation=rotation+math.sin(phase*1.6+item.seed*7)*9
+        alpha(item.plume,"BackgroundTransparency",1-envelope*(.2+burst*.08))
+        alpha(item.core,"BackgroundTransparency",1-envelope*(.48+burst*.15))
+    end
+end
+UI.dockAura=createAura(UI.window,"DockAura","window",{3,4,3,4},false)
+UI.panelAura=createAura(UI.window,"PanelAura","pane",{7,4,7,4},false)
+UI.launcherAura=createAura(UI.launcher,"LauncherAura","launcher",{2,2,2,2},true)
+UI.launcherAura.host.Size=UDim2.fromOffset(68,68)
+
 local layout={}
 local function applyPane()
     if not layout.width then return end
@@ -297,6 +386,9 @@ local function applyPane()
     UI.reveal.Visible=p>.001
     UI.window.Size=UDim2.fromOffset(layout.dockWidth+(layout.gap+layout.panelWidth)*p,layout.height)
     UI.panel.Position=UDim2.fromOffset(4-12*(1-p),4)
+    UI.panelAura.host.Position=UDim2.fromOffset(layout.dockWidth+layout.gap+4,4)
+    UI.panelAura.host.Size=UDim2.fromOffset(math.max(0,layout.panelWidth*p-8),layout.height-8)
+    UI.panelAura.host.Visible=p>.03
     UI.foldIcon.Rotation=180*(1-p)
     UI.selectionLight.Visible=state.paneOpen
     refreshAlpha()
@@ -319,10 +411,13 @@ local function resize(initial)
     layout.gap=8;layout.panelWidth=math.max(150,layout.width-layout.dockWidth-layout.gap)
     local dw,h=layout.dockWidth,layout.height
     UI.dock.Size=UDim2.fromOffset(dw,h)
+    UI.dockAura.host.Size=UDim2.fromOffset(dw,h)
     UI.dockCrown.Visible=dw>=150
-    UI.brand.Position=UDim2.fromOffset(dw>=150 and 49 or 14,13)
-    UI.brand.Size=UDim2.fromOffset(dw-(dw>=150 and 55 or 24),36)
-    UI.brand.TextSize=dw>=150 and 22 or (dw<120 and 18 or 21)
+    UI.brand.Position=UDim2.fromOffset(dw>=150 and 46 or 8,8)
+    UI.brand.Size=UDim2.fromOffset(dw-(dw>=150 and 52 or 16),44)
+    UI.brandFallback.Position=UDim2.fromOffset(dw>=150 and 49 or 14,13)
+    UI.brandFallback.Size=UDim2.fromOffset(dw-(dw>=150 and 55 or 24),36)
+    UI.brandFallback.TextSize=dw>=150 and 22 or (dw<120 and 18 or 21)
     local top=h<320 and 58 or 76
     UI.dockDivider.Position=UDim2.fromOffset(14,top-12)
     UI.dragArea.Size=UDim2.new(1,0,0,top-12)
@@ -346,7 +441,7 @@ local function resize(initial)
     UI.controls.Size=UDim2.fromOffset(dw-24,36)
     for i,name in ipairs({"Minimize","Collapse","Close"}) do
         UI[name].Position=UDim2.fromOffset((i-1)*(controlW+6),0);UI[name].Size=UDim2.fromOffset(controlW,36)
-        UI[name]:FindFirstChild("Icon_"..({"minimize","fold","close"})[i]).Position=UDim2.fromOffset((controlW-22)/2,7)
+        controlArtwork[name].glyph.Position=UDim2.fromOffset((controlW-22)/2,7)
     end
     UI.reveal.Position=UDim2.fromOffset(dw+layout.gap,0)
     local pw=layout.panelWidth-8
@@ -376,11 +471,13 @@ local function resize(initial)
     local narrow=cw<360
     local heroHeight=narrow and 248 or math.min(200,math.max(136,h-8-headerH-54))
     UI.hero.Size=UDim2.new(1,-8,0,heroHeight)
-    UI.heroTitle.TextSize=narrow and 25 or 32
-    UI.heroTitle.Position=UDim2.fromOffset(narrow and 15 or 22,narrow and 10 or (heroHeight<180 and 14 or 32))
-    UI.heroTitle.Size=UDim2.fromOffset(narrow and cw-38 or math.min(236,cw*.51),48)
+    UI.heroTitleFallback.TextSize=narrow and 25 or 32
+    UI.heroTitleFallback.Position=UDim2.fromOffset(narrow and 15 or 22,narrow and 10 or (heroHeight<180 and 14 or 32))
+    UI.heroTitleFallback.Size=UDim2.fromOffset(narrow and cw-38 or math.min(236,cw*.51),48)
+    UI.heroTitle.Position=UDim2.fromOffset(narrow and 10 or 18,narrow and 4 or 10)
+    UI.heroTitle.Size=UDim2.fromOffset(narrow and cw-28 or math.min(268,cw*.52),narrow and 50 or math.min(100,heroHeight-86))
     UI.heroUnderline.Visible=not narrow
-    UI.heroUnderline.Position=UDim2.fromOffset(24,heroHeight<180 and 72 or 94)
+    UI.heroUnderline.Position=UDim2.fromOffset(24,heroHeight<180 and heroHeight-72 or 124)
     UI.emblemHost.Size=UDim2.fromOffset(narrow and math.min(cw-28,152) or math.min(cw*.45,220),narrow and 138 or heroHeight-6)
     UI.emblemHost.Position=narrow and UDim2.new(.5,-UI.emblemHost.Size.X.Offset/2,0,52) or UDim2.new(1,-UI.emblemHost.Size.X.Offset-5,0,3)
     UI.openMain.Position=UDim2.fromOffset(narrow and 15 or 22,narrow and 192 or heroHeight-60)
@@ -515,6 +612,10 @@ end)
 local ASSETS={
     R={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/launcher-r-v1.png",file="ReyznX-launcher-r-v1.png",bytes=2136070,images={UI.launcherImage,UI.recoveryImage}},
     X={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/emblem-x-v1.png",file="ReyznX-emblem-x-v1.png",bytes=1699126,images={UI.xImage,UI.xGlow}},
+    Wordmark={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/wordmark-v1.png",file="ReyznX-wordmark-v1.png",bytes=1399207,images={UI.brand,UI.heroTitle},rect={Vector2.new(0,170),Vector2.new(1672,656)}},
+    Minimize={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/minimize-v1.png",file="ReyznX-minimize-v1.png",bytes=1283532,images={controlArtwork.Minimize.image,controlArtwork.Minimize.glow},rect={Vector2.new(260,101),Vector2.new(1253,680)}},
+    Collapse={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/collapse-v1.png",file="ReyznX-collapse-v1.png",bytes=1337784,images={controlArtwork.Collapse.image,controlArtwork.Collapse.glow},rect={Vector2.new(254,103),Vector2.new(1268,683)}},
+    Close={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/close-v1.png",file="ReyznX-close-v1.png",bytes=1570916,images={controlArtwork.Close.image,controlArtwork.Close.glow},rect={Vector2.new(187,84),Vector2.new(1401,713)}},
 }
 local function validPng(body,asset)
     return type(body)=="string" and #body==asset.bytes and body:sub(1,8)=="\137PNG\13\10\26\10" and body:sub(13,16)=="IHDR" and body:sub(-8,-5)=="IEND"
@@ -550,7 +651,11 @@ local function loadAsset(key,asset)
     end
     if not state.alive then return end
     if not uri then UI.gui:SetAttribute("Asset"..key,"failed");warn("Reyzn X: could not load the "..key.." PNG.");return end
-    for _,o in ipairs(asset.images) do o.Image=uri end
+    for _,o in ipairs(asset.images) do
+        -- Use only the visible artwork region; original PNG bytes are unchanged.
+        if asset.rect then o.ImageRectOffset=asset.rect[1];o.ImageRectSize=asset.rect[2] end
+        o.Image=uri
+    end
     UI.gui:SetAttribute("Asset"..key,"assigned")
     -- Preloading runs separately from input, animation and the session clock.
     pcall(function() ContentProvider:PreloadAsync(asset.images) end)
@@ -592,10 +697,20 @@ connect(RunService.Heartbeat,function(dt)
     UI.rFallback.Visible=UI.launcherImage.Image=="" or not UI.launcherImage.IsLoaded
     UI.recoveryFallback.Visible=UI.recoveryImage.Image=="" or not UI.recoveryImage.IsLoaded
     UI.xFallback.Visible=UI.xImage.Image=="" or not UI.xImage.IsLoaded
+    UI.brandFallback.Visible=UI.brand.Image=="" or not UI.brand.IsLoaded
+    UI.heroTitleFallback.Visible=UI.heroTitle.Image=="" or not UI.heroTitle.IsLoaded
+    if not UI.brandFallback.Visible and not UI.heroTitleFallback.Visible then UI.gui:SetAttribute("AssetWordmark","ready") end
+    for name,control in pairs(controlArtwork) do
+        control.fallback.Visible=control.image.Image=="" or not control.image.IsLoaded
+        if not control.fallback.Visible then UI.gui:SetAttribute("Asset"..name,"ready") end
+    end
     if not UI.xFallback.Visible then UI.gui:SetAttribute("AssetX","ready") end
     if not UI.rFallback.Visible then UI.gui:SetAttribute("AssetR","ready") end
     alpha(UI.launcherRim,"Transparency",.5+pulse*.18-.2*state.burst)
+    if UI.launcher.Visible then animateAura(UI.launcherAura,p,state.burst) end
     if state.target=="minimized" and state.finishAt==0 then return end
+    animateAura(UI.dockAura,p,state.burst)
+    if UI.panelAura.host.Visible then animateAura(UI.panelAura,p+.23,state.burst) end
     for _,fx in ipairs({UI.dockFx,UI.panelFx}) do
         alpha(fx.glow,"Transparency",.9-.07*pulse-.24*state.burst)
         alpha(fx.beam,"BackgroundTransparency",.32-.16*pulse-.15*state.burst)

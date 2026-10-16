@@ -12,7 +12,7 @@ if compiler.is_file():
 for forbidden in ("loadstring", "TeleportService", "Humanoid", "VideoFrame", 'make("Sound"', "CharacterAdded", "CharacterRemoving"):
     assert forbidden not in source, forbidden
 assert source.count('game:HttpGet(') == 1, 'Only the fixed PNG downloader may use HTTP'
-assert source.count('https://') == 2, 'Only the two supplied artwork URLs are allowed'
+assert source.count('https://') == 6, 'Only the six supplied artwork URLs are allowed'
 assert 'validPng(body,asset)' in source
 generated = ROOT / "tests" / "_generated.luau"
 try:
