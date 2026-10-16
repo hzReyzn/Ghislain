@@ -6,9 +6,20 @@ Made By Reyzn.
 
 ```lua
 local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-local source = game:HttpGet(url .. "?build=home-neon-20261016&t=" .. tostring(os.time()))
+local source = game:HttpGet(url .. "?build=updraft-toast-20261016&t=" .. tostring(os.time()))
 loadstring(source)()
 ```
+
+## Logo minimizado y aviso de carga
+
+La mejora de fuego se aplica al **logo R minimizado** y al nuevo aviso. El fuego del menú y del panel conserva su implementación anterior.
+
+- La imagen R original mantiene sus bytes y colores. Su región visible se ajusta dentro del mismo botón de 68 × 68; no se añade un marco. Un reflejo diagonal discreto y una compresión de 3.5% responden sin mover la zona de toque ni bloquear el arrastre.
+- El fuego nace en una base común debajo del logo. Ocho fuentes superpuestas mezclan dos llamas completas y un núcleo luminoso por fuente, con alturas y ciclos escalonados. Seis volutas y ocho brasas suben y desaparecen progresivamente; las llamas no se orientan hacia los lados ni hacia abajo.
+- Púrpura, celeste y rosa oscuro forman el volumen del fuego. Las capas completas evitan costuras de franjas y las transiciones complementarias mantienen encendida la base sin saltos visibles al reiniciar cada ciclo.
+- El aviso inferior derecho muestra exactamente **The script has loaded successfully :))**. Entra desde la derecha en 0.48 segundos, permanece completamente visible **4 segundos** y sale hacia la derecha en 0.42 segundos, con transparencia progresiva y una superficie de obsidiana metálica.
+- El aviso tiene su propia aura con doce fuentes, ocho volutas y ocho brasas. No captura toques. Su posición se adapta al área segura de pantalla y su duración continúa al minimizar, plegar o arrastrar el GUI fuera de la pantalla.
+- Tras salir, el aviso elimina sus instancias y se retira del compositor de transparencia y del conjunto de imágenes VFX. Cerrar o reejecutar el script cancela también el aviso; las descargas tardías no lo recrean.
 
 ## Home
 
@@ -42,11 +53,11 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
 - Los tres controles PNG conservan sus acciones: minimizar, plegar/desplegar y cerrar. Las animaciones pueden invertirse sin acumular transparencia ni desplazar sus zonas táctiles.
 - El contenido se puede desplazar verticalmente cuando no cabe en el dispositivo. Los efectos no capturan toques.
-- Ultra High permanece fijo: 74 raíces de fuego con dos capas, 32 partículas y hasta 60 actualizaciones VFX por segundo. Esto no garantiza 60 FPS en todos los dispositivos. No hay selector de calidad ni reducción automática.
+- Ultra High permanece fijo: el menú y el panel mantienen 62 raíces con dos capas y 26 partículas. El logo añade su conjunto acotado de fuego ascendente; el aviso utiliza un conjunto temporal que se destruye al terminar. Los efectos visibles se actualizan hasta 60 veces por segundo. Esto no garantiza 60 FPS en todos los dispositivos. No hay selector de calidad ni reducción automática.
 
 ## Recursos y ejecución
 
-El código completo está en **Reyzn X.lua**. `FireAura`, `ParticlePool`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar.
+El código completo está en **Reyzn X.lua**. `FireAura`, `UpdraftFire`, `LoadToast`, `ParticlePool`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar.
 
 El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los doce recursos fijos del repositorio son once PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una descarga falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El contenido descargado por el GUI nunca se ejecuta: solo son imágenes.
 
@@ -60,6 +71,6 @@ Los PNG originales y el JPEG se conservan sin modificaciones. [ASSET_NOTES.md](a
 python tests/run.py /ruta/a/luau
 ```
 
-El comando compila el Luau, comprueba el formato y tamaño de los doce recursos reales y ejecuta **25 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable y barrido del emblema sin saltos.
+El comando compila el Luau, comprueba el formato y tamaño de los doce recursos reales y ejecuta **30 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable, barrido del emblema sin saltos, fuego ascendente sin asignaciones por fotograma, gestos del logo, temporización y limpieza del aviso, cambios de orientación y descargas que terminan después de desaparecer la notificación.
 
 Las pruebas simulan el cliente. La revisión visual aproximada ayuda a comprobar la distribución, pero ninguna sustituye el renderizado ni la medición de FPS en Roblox/Android.

@@ -323,7 +323,7 @@ return function(source)
                 if o.Name=='EdgeParticle'then particles+=1 end
             end
         end
-        assert(fire==74 and particles==32,'unbounded effect pools')
+        assert(fire==62 and particles==26,'window aura changed or unbounded effect pools')
         local plume=dock:FindFirstChild('FlameSlot');local length=plume:FindFirstChild('FlameCore').Size.Y.Offset
         local objects=#w.objects;w.step(120)
         assert(#w.objects==objects and plume:FindFirstChild('FlameCore').Size.Y.Offset~=length,'frozen or allocating effect')
@@ -339,7 +339,7 @@ return function(source)
         click(gui,'Tab_Main');w.step(30);assert(panel.Visible)
         click(gui,'Minimize');w.step(30)
         assert(plume:FindFirstChild('FlameCore').ImageTransparency==1,'window flame left behind')
-        local logoFlame=launcher:FindFirstChild('FlameSlot'):FindFirstChild('FlameCore')
+        local logoFlame=find(launcher,'UpdraftCore')
         assert(logoFlame.ImageTransparency<1)
         click(gui,'Launcher');w.step(30);assert(logoFlame.ImageTransparency==1)
         close(w,gui)
@@ -362,7 +362,7 @@ return function(source)
                     if o.Name=='FlameSlot' and o.Visible then active+=1 end
                 end
             end
-            assert(active==74 and #w.objects==objects,'quality was reduced or pools recreated')
+            assert(active==62 and #w.objects==objects,'window quality was reduced or pools recreated')
         end
         near(win.Position.X.Offset,pos.X.Offset);near(win.Position.Y.Offset,pos.Y.Offset)
         near(win.Size.X.Offset,size.X.Offset);near(win.Size.Y.Offset,size.Y.Offset)
@@ -518,6 +518,119 @@ return function(source)
         local plume=find(gui,'DockAura'):FindFirstChild('FlameSlot');local p=plume.Position
         w.step(90);near(plume.Position.X.Offset,p.X.Offset);near(plume.Position.Y.Offset,p.Y.Offset)
         close(w,gui)
+    end)
+    test('launcher fire has a continuous bottom source, upward flow and fixed reusable layers',function()
+        local w,gui=launch();w.step(310);click(gui,'Minimize');w.step(30)
+        local launcher,aura=find(gui,'Launcher'),find(gui,'LauncherAura')
+        assert(not aura:FindFirstChild('FlameSlot') and not aura:FindFirstChild('EdgeEnergy'))
+        local roots,layers,wisps,embers=0,0,0,0
+        for _,o in ipairs(aura:GetDescendants())do
+            if o:IsA('GuiObject')then assert(not o.Active,'fire must not intercept touches')end
+            if o.Name=='UpdraftRoot'then
+                roots+=1;near(o.Position.Y.Offset,70)
+                assert(o.Rotation==nil or o.Rotation==0,'root points sideways or down')
+            elseif o.Name=='UpdraftVeil' or o.Name=='UpdraftBody'then
+                layers+=1;assert(o.Image=='mock://ReyznX-flame-wisp-v1.png')
+                assert(o.ImageRectSize.Y>0 and o.ImageRectOffset.Y+o.ImageRectSize.Y<=1254)
+            elseif o.Name=='RisingWisp'then wisps+=1
+            elseif o.Name=='RisingEmber'then embers+=1 end
+        end
+        assert(roots==8 and layers==16 and wisps==6 and embers==8,'pool budget changed')
+        assert(find(gui,'LauncherArtwork').ZIndex>aura.ZIndex and find(gui,'LauncherR').ImageTransparency==0)
+        near(launcher.Size.X.Offset,68);near(launcher.Size.Y.Offset,68)
+        local wisp=find(aura,'RisingWisp');local ribbon=find(aura,'UpdraftBody');local veil=find(aura,'UpdraftVeil')
+        local y,opacity=wisp.Position.Y.Offset,1-wisp.ImageTransparency
+        local x=ribbon.Position.X.Offset;local objects=#w.objects
+        for _=1,240 do
+            w.step(1)
+            local nextY,nextOpacity=wisp.Position.Y.Offset,1-wisp.ImageTransparency
+            if nextY>y then assert(opacity<.01 and nextOpacity<.01,'visible reset in rising flame') end
+            y=nextY;opacity=nextOpacity
+            assert(2-ribbon.ImageTransparency-veil.ImageTransparency>.86,'root fire disappears between cycles')
+        end
+        assert(#w.objects==objects and ribbon.Position.X.Offset~=x,'frozen fire or per-frame allocation')
+        click(gui,'Launcher');w.step(30);near(ribbon.ImageTransparency,1)
+        local position=ribbon.Position;w.step(60)
+        near(ribbon.Position.X.Offset,position.X.Offset);near(ribbon.Position.Y.Offset,position.Y.Offset)
+        close(w,gui)
+    end)
+    test('launcher artwork presses independently of its drag target and returns to full scale',function()
+        local w,gui=launch();w.step(30);click(gui,'Minimize');w.step(30)
+        local launcher,press=find(gui,'Launcher'),find(gui,'LauncherPressScale')
+        local e=w.env;local size=launcher.AbsoluteSize
+        local finger={UserInputType=e.Enum.UserInputType.Touch,Position=e.Vector3.new(20,160)}
+        launcher.InputBegan:Fire(finger);w.step(5)
+        assert(press.Scale<1 and press.Scale>=.965)
+        near(launcher.AbsoluteSize.X,size.X);near(launcher.AbsoluteSize.Y,size.Y)
+        w.services.UserInputService.InputEnded:Fire({UserInputType=e.Enum.UserInputType.Touch});w.step(10)
+        assert(press.Scale<1,'unrelated touch released the press')
+        w.services.UserInputService.WindowFocusReleased:Fire();w.step(20);near(press.Scale,1)
+        for _=1,3 do click(gui,'Launcher');w.step(7);click(gui,'Minimize');w.step(30) end
+        near(find(gui,'LauncherR').ImageTransparency,0)
+        assert(not launcher:FindFirstChildOfClass('UIStroke') and launcher.BackgroundTransparency==1)
+        close(w,gui)
+    end)
+    test('load toast enters from right, holds four seconds, fades right and releases its resources',function()
+        local w,gui=launch(844,390)
+        local toast=find(gui,'LoadNotification');local face=find(toast,'NotificationFace')
+        local message=find(toast,'NotificationMessage');local progress=find(gui,'ToastProgress')
+        assert(message.Text=='The script has loaded successfully :))' and message.TextWrapped)
+        assert(toast.AbsolutePosition.X>844 and message.TextTransparency==1)
+        for _,o in ipairs(toast:GetDescendants())do
+            if o:IsA('GuiObject')then assert(not o.Active,'notification blocks game controls')end
+        end
+        local x=toast.AbsolutePosition.X
+        w.step(8)
+        assert(toast.AbsolutePosition.X<x and progress.Value>0 and progress.Value<1)
+        w.step(22)
+        assert(gui:GetAttribute('LoadNotification')=='holding');near(progress.Value,1)
+        near(toast.AbsolutePosition.X+toast.AbsoluteSize.X,828)
+        near(toast.AbsolutePosition.Y+toast.AbsoluteSize.Y,364)
+        near(message.TextTransparency,0);assert(face.ZIndex>find(toast,'NotificationAura').ZIndex)
+        x=toast.AbsolutePosition.X
+        w.step(236);assert(gui:GetAttribute('LoadNotification')=='holding');near(toast.AbsolutePosition.X,x)
+        w.step(4);assert(gui:GetAttribute('LoadNotification')=='exiting')
+        w.step(8);assert(toast.AbsolutePosition.X>x and message.TextTransparency>0 and message.TextTransparency<1)
+        w.step(30)
+        assert(gui:GetAttribute('LoadNotification')=='done' and toast.Parent==nil and progress.Parent==nil)
+        assert(not gui:FindFirstChild('NotificationAura',true) and not gui:FindFirstChild('ToastProgress'))
+        local opacity=message.TextTransparency
+        click(gui,'Tab_Main');w.step(15);click(gui,'Minimize');w.step(30)
+        near(message.TextTransparency,opacity,'expired toast still belongs to alpha compositor')
+        assert(w.services.RunService.Heartbeat:Count()==1)
+        close(w,gui)
+    end)
+    test('load toast remains independent of minimization, offscreen drag and viewport changes',function()
+        local w,gui=launch(844,390);w.step(30);click(gui,'Minimize');w.step(30)
+        drag(w,gui,'Launcher',2000,-1200,true)
+        local toast=find(gui,'LoadNotification');local wisp=find(toast,'RisingWisp')
+        local y=wisp.Position.Y.Offset;w.step(20)
+        assert(wisp.Position.Y.Offset~=y,'offscreen GUI paused notification fire')
+        w.viewport={X=320,Y=568};find(gui,'SafeArea'):GetPropertyChangedSignal('AbsoluteSize'):Fire()
+        w.step(2)
+        near(toast.AbsolutePosition.X,16);near(toast.AbsolutePosition.X+toast.AbsoluteSize.X,304)
+        assert(gui:GetAttribute('Minimized') and gui:GetAttribute('LoadNotification')=='holding')
+        w.step(240)
+        assert(gui:GetAttribute('LoadNotification')=='done' and gui:GetAttribute('Minimized'))
+        close(w,gui)
+    end)
+    test('expired toast cannot be revived by delayed artwork and closing/reexecution cancel it',function()
+        local slow=setup();slow.httpDelay=6
+        local g=slow.run(source);slow.step(310)
+        assert(g:GetAttribute('LoadNotification')=='done' and not g:FindFirstChild('LoadNotification',true))
+        slow.step(120);assert(g:GetAttribute('AssetFire')=='ready' and #slow.requests==12)
+        assert(not g:FindFirstChild('UpdraftBody',true):IsDescendantOf(g:FindFirstChild('Window')))
+        close(slow,g)
+        for _,seconds in ipairs({.1,1,4.6})do
+            local w,gui=launch();w.step(math.floor(seconds*60))
+            local old=find(gui,'LoadNotification')
+            local again=w.run(source);w.step(5)
+            assert(old.Parent==nil and gui.Parent==nil and w.services.RunService.Heartbeat:Count()==1)
+            local current=find(again,'LoadNotification');click(again,'Close');w.step(8)
+            assert(again:GetAttribute('LoadNotification')=='exiting')
+            assert(find(again,'ToastProgress').Value<1)
+            w.step(30);assert(current.Parent==nil and w.services.RunService.Heartbeat:Count()==0)
+        end
     end)
     print(tostring(count)..' scenarios passed. Rendering and real touch input still require Roblox.')
 end

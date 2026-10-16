@@ -14,7 +14,7 @@ if previous then previous:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "home-neon-20261016"
+local BUILD = "updraft-toast-20261016"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -34,7 +34,7 @@ local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
 local UI, connections, threads, tweens = {}, {}, {}, {}
 local scopes, alphaEntries, alphaLookup = {}, {}, {}
-local factors = {window=0, pane=0, page=0, launcher=0, fixed=1}
+local factors = {window=0, pane=0, page=0, launcher=0, notification=0, fixed=1}
 
 local function connect(signal, callback)
     local c = signal:Connect(function(...) if state.alive then callback(...) end end)
@@ -65,6 +65,7 @@ local function refreshAlpha()
     factors.pane=factors.window*UI.paneProgress.Value
     factors.page=factors.pane*UI.pageFade.Value
     factors.launcher=UI.launcherFade.Value
+    factors.notification=UI.toastProgress and UI.toastProgress.Value or 0
     for _,entry in ipairs(alphaEntries) do
         entry.object[entry.property]=1-(1-entry.base)*(factors[entry.scope] or 1)
     end
@@ -517,10 +518,24 @@ for _,object in ipairs({UI.dockCrown,UI.brand,UI.dockDivider,UI.nav,UI.controls,
 
 UI.launcher=make("ImageButton",UI.screen,{Name="Launcher",Image="",BackgroundTransparency=1,Size=UDim2.fromOffset(68,68),Position=UDim2.fromOffset(20,150),AutoButtonColor=false,Visible=false,Selectable=true},"launcher")
 UI.launcherScale=make("UIScale",UI.launcher,{Scale=.92})
-UI.rFallback=label(UI.launcher,"RFallback","R",UDim2.fromScale(0,0),UDim2.fromScale(1,1),34,C.white,Enum.Font.GothamBold)
+UI.launcherArt=frame(UI.launcher,"LauncherArtwork",UDim2.fromScale(.5,.5),UDim2.fromScale(1,1),nil,1)
+UI.launcherArt.AnchorPoint=Vector2.new(.5,.5);UI.launcherArt.ZIndex=2;UI.launcherArt.Active=false
+UI.launcherPress=make("UIScale",UI.launcherArt,{Name="LauncherPressScale",Scale=1})
+UI.rFallback=label(UI.launcherArt,"RFallback","R",UDim2.fromScale(0,0),UDim2.fromScale(1,1),34,C.white,Enum.Font.GothamBold)
 UI.rFallback.TextXAlignment=Enum.TextXAlignment.Center
-UI.launcherImage=imageLabel(UI.launcher,"LauncherR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
+UI.launcherImage=imageLabel(UI.launcherArt,"LauncherR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
 UI.launcherImage.ZIndex=2;UI.rFallback.ZIndex=2
+-- Display the actual logo, rather than the transparent margins of its file.
+-- The original PNG is untouched; the touch/drag target remains 68 x 68.
+UI.launcherImage.ImageRectOffset=Vector2.new(88,104)
+UI.launcherImage.ImageRectSize=Vector2.new(1080,1040)
+UI.launcherShine=imageLabel(UI.launcherArt,"LauncherShine",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
+UI.launcherShine.ImageRectOffset=UI.launcherImage.ImageRectOffset
+UI.launcherShine.ImageRectSize=UI.launcherImage.ImageRectSize
+UI.launcherShine.ZIndex=3;UI.launcherShine.Active=false
+alpha(UI.launcherShine,"ImageTransparency",1)
+UI.launcherSweep=gradient(UI.launcherShine,{C.ice,C.chrome,C.light},-24)
+fadeGradient(UI.launcherSweep)
 UI.recovery=make("ImageButton",UI.screen,{Name="Recover",Image="",BackgroundColor3=C.panel,Size=UDim2.fromOffset(40,40),Position=UDim2.new(0,8,.5,-20),AutoButtonColor=false,Visible=false})
 corner(UI.recovery,10);stroke(UI.recovery,C.light,.3)
 UI.recoveryFallback=label(UI.recovery,"RecoveryFallback","R",UDim2.fromScale(0,0),UDim2.fromScale(1,1),22,C.white,Enum.Font.GothamBold)
@@ -677,8 +692,179 @@ function FireAura:update(time,burst)
 end
 UI.dockAura=FireAura.new(UI.window,"DockAura","window",{4,8,4,8},10,false)
 UI.panelAura=FireAura.new(UI.window,"PanelAura","pane",{12,7,12,7},16,false)
-UI.launcherAura=FireAura.new(UI.launcher,"LauncherAura","launcher",{3,3,3,3},6,true)
-UI.launcherAura.host.Size=UDim2.fromOffset(68,68)
+
+-- UpdraftFire is deliberately separate from the existing window aura. Every
+-- root faces UP, overlapping the next root beneath the artwork. Whole textures
+-- grow, rise and crossfade with staggered lifetimes; no cut-band seams, rotated
+-- stamps along four edges, new textures, shaders or frame allocations.
+local UpdraftFire={};UpdraftFire.__index=UpdraftFire
+local firePink=Color3.fromRGB(183,48,139)
+local firePurple=Color3.fromRGB(151,62,246)
+local fireCyan=Color3.fromRGB(141,220,255)
+function UpdraftFire.new(parent,name,scope,width,height,wide)
+    local host=frame(parent,name,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),nil,1,scope)
+    host.Active=false;host.ClipsDescendants=false;host.ZIndex=0
+    local self=setmetatable({host=host,roots={},wisps={},embers={},wide=wide},UpdraftFire)
+    local count=wide and 12 or 8
+    for i=1,count do
+        local seed=i*1.713
+        local root=frame(host,"UpdraftRoot",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1),nil,1)
+        root.Active=false
+        local layers={}
+        for layer=1,2 do
+            local image=imageLabel(root,layer==1 and "UpdraftVeil" or "UpdraftBody",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1))
+            image.AnchorPoint=Vector2.new(.5,1);image.ScaleType=Enum.ScaleType.Stretch;image.Active=false
+            image.ImageRectOffset=Vector2.new(110,0);image.ImageRectSize=Vector2.new(1040,1254)
+            local wash=gradient(image,{firePink:Lerp(C.pink,.35),firePurple,C.light,fireCyan},90)
+            wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.30),
+                NumberSequenceKeypoint.new(.2,.02),NumberSequenceKeypoint.new(.78,0),NumberSequenceKeypoint.new(1,1)})
+            alpha(image,"ImageTransparency",1)
+            layers[layer]=image;VFX.images[#VFX.images+1]=image
+        end
+        local core=imageLabel(root,"UpdraftCore",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1))
+        core.AnchorPoint=Vector2.new(.5,1);core.ScaleType=Enum.ScaleType.Stretch;core.Active=false
+        local coreLight=gradient(core,{firePurple,fireCyan,C.chrome},90)
+        coreLight.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),
+            NumberSequenceKeypoint.new(.35,0),NumberSequenceKeypoint.new(.78,0),NumberSequenceKeypoint.new(1,1)})
+        alpha(core,"ImageTransparency",1)
+        VFX.images[#VFX.images+1]=core
+        self.roots[i]={node=root,layers=layers,core=core,seed=seed,
+            fraction=(i-.5)/count,height=.85+noise(seed)*.29}
+    end
+    for i=1,wide and 8 or 6 do
+        local node=imageLabel(host,"RisingWisp",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1))
+        node.AnchorPoint=Vector2.new(.5,1);node.ScaleType=Enum.ScaleType.Stretch;node.Active=false
+        gradient(node,{firePink,firePurple,fireCyan},90);alpha(node,"ImageTransparency",1)
+        VFX.images[#VFX.images+1]=node
+        self.wisps[i]={node=node,seed=i*1.391,rate=.53+noise(i)*.17}
+    end
+    for i=1,8 do
+        local node=frame(host,"RisingEmber",UDim2.fromOffset(0,0),UDim2.fromOffset(1.3,3.5),i%2==0 and fireCyan or C.rose,1)
+        node.Active=false;node.AnchorPoint=Vector2.new(.5,.5);corner(node,2)
+        self.embers[i]={node=node,seed=i*.713,rate=.38+noise(i+6)*.22}
+    end
+    return self
+end
+function UpdraftFire:update(time,burst)
+    local w,h=self.host.Size.X.Offset,self.host.Size.Y.Offset
+    local count=#self.roots
+    for _,p in ipairs(self.roots) do
+        local baseX=-3+(w+6)*p.fraction
+        local baseY=h+2
+        local height=(h+(self.wide and 27 or 40))*p.height
+        local width=self.wide and (w+14)/count*2 or 47
+        p.node.Position=UDim2.fromOffset(baseX,baseY)
+        for layer,image in ipairs(p.layers) do
+            local age=(time*(.61+noise(p.seed)*.18)+p.seed+(layer-1)*.5)%1
+            local envelope=math.sin(age*math.pi)^2
+            local bend=math.sin(time*2.5+p.seed)*2+math.sin(time*4.3-p.seed)*.7
+            image.Position=UDim2.fromOffset(bend+math.sin(age*math.pi)*(layer==1 and -3 or 3),-age*5)
+            image.Size=UDim2.fromOffset(width*(1.1-age*.2),height*(.73+age*.53))
+            image.Rotation=bend*(layer==1 and -1.5 or 2)
+            alpha(image,"ImageTransparency",1-envelope*(.87+burst*.04))
+        end
+        p.core.Position=UDim2.fromOffset(math.sin(time*3-p.seed)*1.5,0)
+        p.core.Size=UDim2.fromOffset(width*.63,height*.76)
+        p.core.Rotation=math.sin(time*2.6+p.seed)*3
+        alpha(p.core,"ImageTransparency",.64-.12*math.sin(time*3.1+p.seed)^2)
+    end
+    for _,p in ipairs(self.wisps) do
+        local age=(time*p.rate+p.seed)%1
+        local envelope=math.sin(age*math.pi)^2
+        local x=-5+(w+10)*noise(p.seed)+math.sin(age*4+p.seed)*5*age
+        local y=h+8-age*(h+(self.wide and 48 or 65))
+        p.node.Position=UDim2.fromOffset(x,y)
+        p.node.Size=UDim2.fromOffset((self.wide and 30 or 22)*(1-age*.38),42+age*13)
+        p.node.Rotation=math.sin(time*2+p.seed)*7
+        alpha(p.node,"ImageTransparency",1-envelope*.66)
+    end
+    for _,p in ipairs(self.embers) do
+        local age=(time*p.rate+p.seed)%1
+        local x=-8+(w+16)*noise(p.seed+4)+math.sin(age*5+p.seed)*4
+        p.node.Position=UDim2.fromOffset(x,h+6-age*(h+54))
+        alpha(p.node,"BackgroundTransparency",1-math.sin(age*math.pi)^2*.62)
+    end
+end
+UI.launcherAura=UpdraftFire.new(UI.launcher,"LauncherAura","launcher",68,68,false)
+
+-- One short, independent toast per execution. Its whole surface/aura slides
+-- together; the four-second hold starts after the entrance has completed.
+local LoadToast={};LoadToast.__index=LoadToast
+function LoadToast.new()
+    UI.toastProgress=make("NumberValue",UI.gui,{Name="ToastProgress",Value=0})
+    local host=frame(UI.screen,"LoadNotification",UDim2.fromOffset(0,0),UDim2.fromOffset(330,84),nil,1,"notification")
+    host.AnchorPoint=Vector2.new(1,1);host.ZIndex=12;host.Active=false;host.ClipsDescendants=false
+    local face=frame(host,"NotificationFace",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),0)
+    face.ZIndex=2;face.Active=false;corner(face,13)
+    gradient(face,{Color3.fromRGB(30,22,43),C.black,Color3.fromRGB(20,18,30)},28)
+    local edge=stroke(face,C.silver,.48,1)
+    gradient(edge,{firePink,C.light,fireCyan},18)
+    local crown=icon(face,"crown",UDim2.fromOffset(16,29),25,C.light)
+    crown.Active=false
+    local title=label(face,"NotificationBrand","Reyzn",UDim2.fromOffset(54,9),UDim2.new(1,-70,0,21),17,C.light,Enum.Font.GrenzeGotisch)
+    title.Active=false
+    local message=label(face,"NotificationMessage","The script has loaded successfully :))",UDim2.fromOffset(54,31),UDim2.new(1,-70,0,43),18,C.white,OPTION_FONT)
+    message.TextWrapped=true;message.TextTruncate=Enum.TextTruncate.None;message.Active=false
+    local self=setmetatable({host=host,phase="prepared",progress=UI.toastProgress},LoadToast)
+    self.fire=UpdraftFire.new(host,"NotificationAura","notification",330,84,true)
+    self.connection=connect(self.progress.Changed,function() self:position();refreshAlpha() end)
+    self:resize()
+    return self
+end
+function LoadToast:start()
+    self.started=os.clock();self.phase="entering"
+    UI.gui:SetAttribute("LoadNotification","entering")
+    tween(self.progress,.48,{Value=1})
+end
+function LoadToast:position()
+    if self.phase=="done" then return end
+    -- The extra 78 px hides even the outermost fire at either end of the slide.
+    self.host.Position=UDim2.new(1,-16+(self.width+78)*(1-self.progress.Value),1,-26)
+end
+function LoadToast:resize()
+    if self.phase=="done" then return end
+    self.width=math.min(330,math.max(200,UI.screen.AbsoluteSize.X-32))
+    self.host.Size=UDim2.fromOffset(self.width,84)
+    self.fire.host.Size=self.host.Size
+    self:position()
+end
+function LoadToast:destroy()
+    if self.phase=="done" then return end
+    self.phase="done";self.connection:Disconnect()
+    local removed={[self.host]=true,[self.progress]=true}
+    for _,o in ipairs(self.host:GetDescendants()) do removed[o]=true end
+    -- Unregister before destroying so future page/opacity changes never write
+    -- to expired decoration. Pending asset loads share this same image array.
+    for i=#alphaEntries,1,-1 do
+        if removed[alphaEntries[i].object] then table.remove(alphaEntries,i) end
+    end
+    for i=#VFX.images,1,-1 do if removed[VFX.images[i]] then table.remove(VFX.images,i) end end
+    for o in pairs(removed) do
+        alphaLookup[o]=nil;scopes[o]=nil
+        if tweens[o] then tweens[o]:Cancel();tweens[o]=nil end
+    end
+    self.host:Destroy();self.progress:Destroy();UI.toastProgress=nil
+    self.fire=nil;self.host=nil;self.progress=nil
+    UI.gui:SetAttribute("LoadNotification","done")
+end
+function LoadToast:dismiss(seconds)
+    if self.phase=="done" then return end
+    self.phase="exiting";self.endsAt=os.clock()+seconds
+    UI.gui:SetAttribute("LoadNotification","exiting")
+    tween(self.progress,seconds,{Value=0})
+end
+function LoadToast:update(now,time)
+    if self.phase=="done" then return end
+    local elapsed=now-self.started
+    if self.endsAt and now>=self.endsAt then self:destroy();return end
+    if elapsed>=4.48 and self.phase~="exiting" then
+        self:dismiss(.42)
+    elseif elapsed>=.48 and self.phase=="entering" then
+        self.phase="holding";UI.gui:SetAttribute("LoadNotification","holding")
+    end
+    self.fire:update(time,0)
+end
+UI.loadToast=LoadToast.new()
 
 -- Put the existing labels/icons inside the press surface, while the original
 -- TextButton's touch/click rectangle remains stationary and full-sized.
@@ -715,6 +901,7 @@ end
 local function resize(initial)
     local v=UI.screen.AbsoluteSize
     if v.X<1 or v.Y<1 then return end
+    UI.loadToast:resize()
     layout.width=math.min(880,math.floor(v.X*(v.X<600 and .94 or .86)))
     layout.height=math.min(420,math.floor(v.Y*.82))
     layout.dockWidth=v.X<320 and 110 or (v.X<600 and 126 or 170)
@@ -848,10 +1035,12 @@ end
 local function transition(target)
     if not state.alive or state.target=="closed" then return end
     state.drag=nil
+    tween(UI.launcherPress,.16,{Scale=1})
     state.target=target;state.burst=1;state.finishAt=os.clock()+.34
     UI.gui:SetAttribute("Minimized",target=="minimized")
     UI.gui:SetAttribute("Transition",target=="closed" and "closing" or target=="minimized" and "minimizing" or "opening")
     UI.recovery.Visible=false
+    if target=="closed" then UI.loadToast:dismiss(.22) end
     if target=="open" then
         UI.window.Visible=true
         tween(UI.windowFade,.28,{Value=1});tween(UI.zoom,.32,{Value=1})
@@ -882,7 +1071,12 @@ local function beginDrag(target,input)
 end
 connect(UI.dragArea.InputBegan,function(input) beginDrag(UI.window,input) end)
 connect(UI.panelDrag.InputBegan,function(input) beginDrag(UI.window,input) end)
-connect(UI.launcher.InputBegan,function(input) beginDrag(UI.launcher,input) end)
+connect(UI.launcher.InputBegan,function(input)
+    beginDrag(UI.launcher,input)
+    if state.drag and state.drag.target==UI.launcher and state.drag.input==input then
+        tween(UI.launcherPress,.12,{Scale=.965})
+    end
+end)
 connect(Input.InputChanged,function(input)
     local drag=state.drag
     if not drag then return end
@@ -898,7 +1092,10 @@ local function endDrag(input,force)
     local drag=state.drag
     if not drag then return end
     if not force and ((drag.touch and input~=drag.input) or (not drag.touch and input.UserInputType~=Enum.UserInputType.MouseButton1)) then return end
-    if drag.target==UI.launcher and drag.moved then state.suppressLauncherUntil=os.clock()+.4 end
+    if drag.target==UI.launcher then
+        tween(UI.launcherPress,.2,{Scale=1})
+        if drag.moved then state.suppressLauncherUntil=os.clock()+.4 end
+    end
     state.drag=nil
 end
 connect(Input.InputEnded,function(input) endDrag(input,false) end)
@@ -921,7 +1118,7 @@ local ASSETS={
     IconScripts={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-scripts-v1.png",file="ReyznX-icon-scripts-v1.png",bytes=2546120,images=artworkImages.IconScripts},
     IconSettings={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-settings-v1.png",file="ReyznX-icon-settings-v1.png",bytes=1892474,images=artworkImages.IconSettings},
     Background={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/background-cyber-v2.jpg",file="ReyznX-background-cyber-v2.jpg",bytes=167325,format="jpeg",images=artworkImages.Background},
-    R={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/launcher-r-v1.png",file="ReyznX-launcher-r-v1.png",bytes=2136070,images={UI.launcherImage,UI.recoveryImage}},
+    R={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/launcher-r-v1.png",file="ReyznX-launcher-r-v1.png",bytes=2136070,images={UI.launcherImage,UI.recoveryImage,UI.launcherShine}},
     X={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/emblem-x-v1.png",file="ReyznX-emblem-x-v1.png",bytes=1699126,images=artworkImages.Emblem},
     Fire={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/flame-wisp-v1.png",file="ReyznX-flame-wisp-v1.png",bytes=1172326,images=VFX.images},
     Minimize={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/minimize-v1.png",file="ReyznX-minimize-v1.png",bytes=1283532,images={controlArtwork.Minimize.image,controlArtwork.Minimize.glow},rect={Vector2.new(260,101),Vector2.new(1253,680)}},
@@ -991,7 +1188,7 @@ resize(true)
 selectPage("Home",false)
 UI.gui:SetAttribute("PanelOpen",true)
 UI.gui:SetAttribute("Minimized",false)
-updateClock();refreshAlpha();transition("open")
+updateClock();refreshAlpha();transition("open");UI.loadToast:start()
 connect(RunService.Heartbeat,function(dt)
     updateClock()
     if state.finishAt>0 and os.clock()>=state.finishAt then
@@ -1009,6 +1206,9 @@ connect(RunService.Heartbeat,function(dt)
     state.budget=state.budget%interval;state.phase+=elapsed
     state.burst=math.max(0,state.burst-elapsed*3)
     local p=state.phase
+    -- Notifications keep their own lifetime, including while the window or
+    -- launcher is minimized, folded or dragged entirely off the screen.
+    UI.loadToast:update(os.clock(),p)
     local pulse=.5+.5*math.sin(p*1.8)
     UI.recovery.Visible=state.target~="closed" and state.finishAt==0 and offscreen(state.target=="minimized" and UI.launcher or UI.window)
     if p>=(state.assetPoll or 0) then
@@ -1035,7 +1235,13 @@ connect(RunService.Heartbeat,function(dt)
     end
     local visibleTarget=state.target=="minimized" and UI.launcher or UI.window
     if state.finishAt==0 and offscreen(visibleTarget) then return end
-    if UI.launcher.Visible then UI.launcherAura:update(p,state.burst) end
+    if UI.launcher.Visible then
+        UI.launcherAura:update(p,state.burst)
+        local cycle=p%5.1
+        local sweep=math.min(1,cycle/1.25)
+        UI.launcherSweep.Offset=Vector2.new(-1+2*sweep,0)
+        alpha(UI.launcherShine,"ImageTransparency",1-math.sin(sweep*math.pi)^2*.24)
+    end
     VFX.reflections:update(elapsed)
     if state.target=="minimized" and state.finishAt==0 then return end
     UI.dockAura:update(p,state.burst)
