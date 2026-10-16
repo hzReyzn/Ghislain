@@ -12,7 +12,12 @@ local playerGui = player:WaitForChild("PlayerGui")
 local previous = playerGui:FindFirstChild("ReyznX")
 if previous then previous:Destroy() end
 
-local VERSION = "2.2.0"
+local VERSION = "2.3.0"
+-- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
+-- an invented Enum.Font entry. The brand and credit retain their own fonts.
+local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
+local ICON_TRANSPARENCY, BACKGROUND_TRANSPARENCY = .85, .76
+local VFX_RATE = 60 -- Ultra High is fixed; no automatic quality reduction.
 local C = {
     base=Color3.fromRGB(10,10,15), panel=Color3.fromRGB(16,15,23),
     black=Color3.fromRGB(8,8,12), steel=Color3.fromRGB(71,68,85),
@@ -22,8 +27,6 @@ local C = {
     deep=Color3.fromRGB(60,31,99), green=Color3.fromRGB(132,225,179), ice=Color3.fromRGB(180,207,255),
     rose=Color3.fromRGB(212,152,219), chrome=Color3.fromRGB(235,237,247),
 }
--- This is a maximum, not a layout setting. Android starts with a smaller budget.
-local DEFAULT_QUALITY = Input.TouchEnabled and "Medium" or "High"
 local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
 local UI, connections, threads, tweens = {}, {}, {}, {}
@@ -104,9 +107,11 @@ local function frame(parent,name,pos,size,color,transparency,scope)
     return make("Frame",parent,{Name=name,Position=pos,Size=size,BackgroundColor3=color or C.panel,BackgroundTransparency=transparency or 0},scope)
 end
 local function label(parent,name,text,pos,size,pixels,color,font)
-    return make("TextLabel",parent,{Name=name,Text=text,Position=pos,Size=size,BackgroundTransparency=1,
-        TextColor3=color or C.white,TextSize=pixels or 14,Font=font or Enum.Font.GothamMedium,
+    local o=make("TextLabel",parent,{Name=name,Text=text,Position=pos,Size=size,BackgroundTransparency=1,
+        TextColor3=color or C.white,TextSize=pixels or 14,Font=font~=OPTION_FONT and font or Enum.Font.GothamMedium,
         TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,TextTruncate=Enum.TextTruncate.AtEnd})
+    if font==OPTION_FONT then o.FontFace=OPTION_FONT end
+    return o
 end
 local function imageLabel(parent,name,pos,size)
     return make("ImageLabel",parent,{Name=name,Image="",Position=pos,Size=size,BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit})
@@ -122,14 +127,27 @@ local paths={
     close={{{6,6},{18,18}},{{18,6},{6,18}}},
     minimize={{{5,16},{19,16}}}, fold={{{14,5},{7,12},{14,19}}},
 }
+local artworkImages={IconHome={},IconMain={},IconScripts={},IconSettings={},Background={}}
+local iconSprites={}
+local iconAssets={home="IconHome",cube="IconMain",code="IconScripts",settings="IconSettings"}
 local function icon(parent,kind,pos,size,color)
     local host=frame(parent,"Icon_"..kind,pos,UDim2.fromOffset(size,size),nil,1)
+    local fallback={}
     for _,path in ipairs(paths[kind]) do
         for i=1,#path-1 do
             local a,b=path[i],path[i+1]; local dx,dy=(b[1]-a[1])*size/24,(b[2]-a[2])*size/24
             local line=frame(host,"Line",UDim2.fromOffset((a[1]+b[1])*size/48,(a[2]+b[2])*size/48),UDim2.fromOffset(math.sqrt(dx*dx+dy*dy),1.7),color or C.silver)
             line.AnchorPoint=Vector2.new(.5,.5); line.Rotation=math.deg(math.atan2(dy,dx)); corner(line,2)
+            fallback[#fallback+1]=line
         end
+    end
+    local asset=iconAssets[kind]
+    if asset then
+        local artwork=imageLabel(host,"OptionArtwork",UDim2.fromScale(.5,.5),UDim2.fromScale(1.42,1.42))
+        artwork.AnchorPoint=Vector2.new(.5,.5);artwork.Active=false
+        alpha(artwork,"ImageTransparency",ICON_TRANSPARENCY)
+        artworkImages[asset][#artworkImages[asset]+1]=artwork
+        iconSprites[#iconSprites+1]={image=artwork,fallback=fallback,key=asset}
     end
     return host
 end
@@ -140,13 +158,6 @@ local metallicColors={Color3.fromRGB(39,37,49),Color3.fromRGB(23,22,32),C.black,
 -- VFX modules share the existing lifecycle and alpha compositor. No downloaded
 -- modules, global render bindings, or full-window CanvasGroup render targets.
 local VFX={images={},auras={},buttons={},reflections={items={},nextAt=5,serial=0}}
-local Quality={names={"Low","Medium","High"},requested=DEFAULT_QUALITY,level=DEFAULT_QUALITY=="High" and 3 or 2,
-    smooth=1/60,bad=0,good=0,cooldown=3}
-Quality.presets={
-    {fps=15,density=.38,particles=.24,glow=false,reflections=false},
-    {fps=30,density=.55,particles=.58,glow=true,reflections=true},
-    {fps=30,density=1,particles=1,glow=true,reflections=true},
-}
 local function shown(object)
     while object and object~=UI.gui do
         if object:IsA("GuiObject") and not object.Visible then return false end
@@ -161,7 +172,7 @@ local function addReflection(object,light,strength)
     return item
 end
 function VFX.reflections:request(item)
-    if not item or not shown(item.object) or not Quality.presets[Quality.level].reflections then return end
+    if not item or not shown(item.object) then return end
     if self.active then alpha(self.active.object,"BackgroundTransparency",1) end
     self.active=item;self.elapsed=0;self.nextAt=state.phase+6.5
 end
@@ -170,7 +181,7 @@ function VFX.reflections:update(dt)
     if item then
         self.elapsed+=dt
         local t=math.min(1,self.elapsed/.95)
-        if not shown(item.object) or not Quality.presets[Quality.level].reflections or t>=1 then
+        if not shown(item.object) or t>=1 then
             alpha(item.object,"BackgroundTransparency",1);self.active=nil
         else
             -- Only ONE diagonal highlight is active, regardless of hover spam.
@@ -259,6 +270,9 @@ end
 UI.gui=make("ScreenGui",playerGui,{Name="ReyznX",ResetOnSpawn=false,DisplayOrder=50,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,IgnoreGuiInset=false})
 pcall(function() UI.gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets end)
 UI.gui:SetAttribute("Version",VERSION)
+UI.gui:SetAttribute("VisualQuality","Ultra High")
+UI.gui:SetAttribute("EffectiveQuality","Ultra High")
+UI.gui:SetAttribute("VFXRate",VFX_RATE)
 local function cleanup()
     if not state.alive then return end
     state.alive=false; state.drag=nil
@@ -279,13 +293,48 @@ UI.window=frame(UI.screen,"Window",UDim2.fromOffset(100,100),UDim2.fromOffset(88
 UI.window.ClipsDescendants=false
 UI.scale=make("UIScale",UI.window,{Scale=.985})
 
+-- Four shallow light fields are clipped inside each surface. Their edge energy
+-- travels independently; no dark shadow extends below the bottom border.
+local InwardLight={};InwardLight.__index=InwardLight
+function InwardLight.new(parent,seed)
+    local self=setmetatable({fields={},seed=seed},InwardLight)
+    local clip=frame(parent,"InwardLight",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),nil,1)
+    corner(clip,14);clip.ClipsDescendants=true;clip.Active=false
+    for side=1,4 do
+        local field=frame(clip,"InwardGlow",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),.88)
+        field.Active=false
+        local horizontal=side%2==1
+        field.Size=horizontal and UDim2.new(.58,0,0,22) or UDim2.new(0,20,.58,0)
+        local wash=gradient(field,{C.ice,C.violet,C.rose},horizontal and 90 or 0)
+        local reverse=side==2 or side==3
+        wash.Transparency=NumberSequence.new({
+            NumberSequenceKeypoint.new(0,reverse and 1 or .05),
+            NumberSequenceKeypoint.new(.45,.78),
+            NumberSequenceKeypoint.new(1,reverse and .05 or 1)})
+        corner(field,12)
+        self.fields[side]={node=field,wash=wash}
+    end
+    return self
+end
+function InwardLight:update(time,burst)
+    for side,item in ipairs(self.fields) do
+        local travel=.21+.19*math.sin(time*.24+self.seed+side*1.7)
+        local node=item.node
+        if side==1 then node.Position=UDim2.new(travel,0,0,0)
+        elseif side==2 then node.Position=UDim2.new(1,-20,travel,0)
+        elseif side==3 then node.Position=UDim2.new(travel,0,1,-22)
+        else node.Position=UDim2.new(0,0,travel,0) end
+        alpha(node,"BackgroundTransparency",.89-.045*math.sin(time*.7+self.seed+side)^2-burst*.025)
+    end
+end
 local function surface(parent,name,pos,size,scope)
     local o=frame(parent,name,pos,size,Color3.new(1,1,1),0,scope);corner(o,16)
     gradient(o,{C.panel,C.base,C.black},100)
-    -- A soft contact shadow, not six bright nested rectangles.
-    local shadow=frame(o,"ContactShadow",UDim2.new(0,12,1,1),UDim2.new(1,-24,0,20),C.black,.35)
-    local shadowFade=gradient(shadow,{C.black,C.black},90)
-    shadowFade.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(.4,.72),NumberSequenceKeypoint.new(1,1)})
+    local background=imageLabel(o,"InterfaceBackground",UDim2.fromOffset(1,1),UDim2.new(1,-2,1,-2))
+    background.ScaleType=Enum.ScaleType.Crop;background.Active=false;corner(background,15)
+    alpha(background,"ImageTransparency",BACKGROUND_TRANSPARENCY)
+    artworkImages.Background[#artworkImages.Background+1]=background
+    local inward=InwardLight.new(o,name=="Dock" and .7 or 2.3)
     local edge=stroke(o,Color3.new(1,1,1),.36,1)
     local metal=gradient(edge,{C.steel,C.silver,C.violet,C.black,C.violet},24)
     local inner=frame(o,"InnerRim",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),nil,1)
@@ -295,7 +344,7 @@ local function surface(parent,name,pos,size,scope)
     local sheen=frame(o,"SurfaceReflection",UDim2.fromOffset(3,3),UDim2.new(1,-6,1,-6),C.chrome,1)
     corner(sheen,14);local sweep=gradient(sheen,{C.chrome,C.ice},28);fadeGradient(sweep)
     addReflection(sheen,sweep,.035)
-    return o,{edge=edge,metal=metal,beam=beam,beamGradient=beamGradient}
+    return o,{edge=edge,metal=metal,beam=beam,beamGradient=beamGradient,inward=inward}
 end
 UI.dock,UI.dockFx=surface(UI.window,"Dock",UDim2.fromOffset(0,0),UDim2.fromOffset(170,420))
 UI.dock.ZIndex=2
@@ -310,11 +359,11 @@ UI.nav=make("ScrollingFrame",UI.dock,{Name="Navigation",Position=UDim2.fromOffse
     ScrollBarImageColor3=C.violet,ScrollBarImageTransparency=.65,Active=true,ScrollingEnabled=true,
     ClipsDescendants=true,ScrollingDirection=Enum.ScrollingDirection.Y,AutomaticCanvasSize=Enum.AutomaticSize.None})
 local navigation={}
-local optionFont=Enum.Font.BuilderSansMedium
+local optionFont=OPTION_FONT
 for i,data in ipairs({{"Home","home"},{"Main","cube"},{"Visuals","spark"},{"Scripts","code"},{"Settings","settings"}}) do
     local b,fx=button(UI.nav,"Tab_"..data[1],UDim2.fromOffset(0,(i-1)*48),UDim2.new(1,-3,0,42))
     local glyph=icon(b,data[2],UDim2.fromOffset(12,10),22,C.muted)
-    local caption=label(b,"Caption",data[1],UDim2.fromOffset(45,0),UDim2.new(1,-51,1,0),17,C.muted,data[1]=="Home" and Enum.Font.GothamMedium or optionFont)
+    local caption=label(b,"Caption",data[1],UDim2.fromOffset(45,0),UDim2.new(1,-51,1,0),19,C.muted,optionFont)
     navigation[data[1]]={button=b,fx=fx,icon=glyph,caption=caption,index=i}
 end
 UI.selectionLight=frame(UI.nav,"SelectionLight",UDim2.fromOffset(0,12),UDim2.fromOffset(2,18),C.white,0)
@@ -359,7 +408,7 @@ UI.reveal.ClipsDescendants=true
 UI.panel,UI.panelFx=surface(UI.reveal,"Panel",UDim2.fromOffset(4,4),UDim2.fromOffset(692,412))
 VFX.surfaces={UI.dockFx,UI.panelFx}
 UI.header=frame(UI.panel,"Header",UDim2.fromOffset(20,8),UDim2.new(1,-40,0,58),nil,1)
-UI.pageTitle=label(UI.header,"PageTitle","Home",UDim2.fromOffset(0,0),UDim2.fromOffset(130,54),20,C.white,Enum.Font.GothamBold)
+UI.pageTitle=label(UI.header,"PageTitle","Home",UDim2.fromOffset(0,0),UDim2.fromOffset(130,54),23,C.white,optionFont)
 UI.avatarPlate=frame(UI.header,"AvatarPlate",UDim2.fromOffset(190,11),UDim2.fromOffset(32,32),C.panel)
 corner(UI.avatarPlate,100);stroke(UI.avatarPlate,C.light,.18)
 UI.avatarFallback=label(UI.avatarPlate,"AvatarFallback",string.upper(string.sub(player.Name,1,1)),UDim2.fromScale(0,0),UDim2.fromScale(1,1),14)
@@ -386,8 +435,7 @@ for _,name in ipairs({"Home","Main","Visuals","Scripts","Settings"}) do
         ClipsDescendants=true,ScrollingDirection=Enum.ScrollingDirection.Y,AutomaticCanvasSize=Enum.AutomaticSize.None,Visible=name=="Home"},"page")
     pages[name]=page
 end
--- Main, Visuals and Scripts retain their empty content. Settings only adds the
--- requested visual-quality control; no gameplay modules are installed here.
+-- The four work pages remain empty. Visual quality is always Ultra High.
 UI.hero=frame(pages.Home,"Hero",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,200),Color3.new(1,1,1))
 corner(UI.hero,13);stroke(UI.hero,C.violet,.62)
 gradient(UI.hero,{Color3.fromRGB(28,22,40),C.black,Color3.fromRGB(26,17,39)},32)
@@ -423,16 +471,13 @@ UI.rFallback=label(UI.launcher,"RFallback","R",UDim2.fromScale(0,0),UDim2.fromSc
 UI.rFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.launcherImage=imageLabel(UI.launcher,"LauncherR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
 UI.launcherImage.ZIndex=2;UI.rFallback.ZIndex=2
-UI.launcherHalo=frame(UI.launcher,"LauncherHalo",UDim2.fromOffset(3,3),UDim2.new(1,-6,1,-6),nil,1)
-corner(UI.launcherHalo,16);UI.launcherRim=stroke(UI.launcherHalo,C.violet,.65,2)
-gradient(UI.launcherRim,{C.violet,C.silver,C.deep},30)
 UI.recovery=make("ImageButton",UI.screen,{Name="Recover",Image="",BackgroundColor3=C.panel,Size=UDim2.fromOffset(40,40),Position=UDim2.new(0,8,.5,-20),AutoButtonColor=false,Visible=false})
 corner(UI.recovery,10);stroke(UI.recovery,C.light,.3)
 UI.recoveryFallback=label(UI.recovery,"RecoveryFallback","R",UDim2.fromScale(0,0),UDim2.fromScale(1,1),22,C.white,Enum.Font.GothamBold)
 UI.recoveryFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.recoveryImage=imageLabel(UI.recovery,"RecoveryR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
 
--- FireAura: two tinted texture layers per plume, with independent lifetimes.
+-- FireAura: two interleaved rising strands per root, with complementary lifetimes.
 -- ParticlePool: fixed crystal/silver slots; all emit OUTSIDE the panel bounds.
 -- Each aura is behind the opaque UI surface, never above text or hit targets.
 local FireAura={};FireAura.__index=FireAura
@@ -485,10 +530,6 @@ function ParticlePool.new(host,count,small)
     end
     return self
 end
-function ParticlePool:quality(preset)
-    local limit=math.max(1,math.floor(#self.slots*preset.particles))
-    for i,p in ipairs(self.slots) do p.enabled=i<=limit;p.node.Visible=p.enabled end
-end
 function ParticlePool:update(time,w,h)
     for _,p in ipairs(self.slots) do
         if p.enabled then
@@ -512,35 +553,30 @@ end
 function FireAura.new(parent,name,scope,counts,particleCount,small)
     local host=frame(parent,name,UDim2.fromOffset(0,0),UDim2.fromOffset(100,100),nil,1,scope)
     host.ZIndex=0;host.Active=false;host.ClipsDescendants=false
-    local self=setmetatable({host=host,plumes={},veils={},small=small,seed=#VFX.auras*.937},FireAura)
+    local self=setmetatable({host=host,plumes={},small=small,seed=#VFX.auras*.937},FireAura)
     self.particles=ParticlePool.new(host,particleCount,small)
-    for side=1,4 do
-        -- A very faint continuous flame bed connects the brighter local wisps.
-        -- This is a textured silhouette, never a rectangular outline/stroke.
-        local veil=imageLabel(host,"FlameVeil",UDim2.fromOffset(0,0),UDim2.fromOffset(80,24))
-        veil.AnchorPoint=Vector2.new(.5,.5);veil.ScaleType=Enum.ScaleType.Stretch
-        veil.ImageColor3=side%2==0 and C.rose or C.ice
-        alpha(veil,"ImageTransparency",.9)
-        local wash=gradient(veil,{C.violet,C.ice,C.light},0)
-        wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.18,.12),NumberSequenceKeypoint.new(.77,.2),NumberSequenceKeypoint.new(1,1)})
-        self.veils[side]=veil;VFX.images[#VFX.images+1]=veil
-    end
     for side,count in ipairs(counts) do
         for index=1,count do
             local seed=side*.973+index*1.171+self.seed
-            local root=frame(host,"FlameSlot",UDim2.fromOffset(0,0),UDim2.fromOffset(48,44),nil,1)
-            root.AnchorPoint=Vector2.new(.5,.5);root.Active=false
-            local haze=imageLabel(root,"FlameHaze",UDim2.fromScale(.5,.5),UDim2.fromScale(1.45,1.18))
-            haze.AnchorPoint=Vector2.new(.5,.5);haze.ScaleType=Enum.ScaleType.Stretch
-            haze.ImageColor3=({C.violet,C.ice,C.rose})[1+(side+index)%3]
-            local core=imageLabel(root,"FlameCore",UDim2.fromScale(.5,.5),UDim2.fromScale(1,1))
-            core.AnchorPoint=Vector2.new(.5,.5);core.ScaleType=Enum.ScaleType.Stretch
-            -- One immutable color ramp per sprite, not a new ColorSequence/frame.
-            gradient(core,{index%3==0 and C.rose or C.violet,C.ice,C.chrome},90)
-            alpha(haze,"ImageTransparency",1);alpha(core,"ImageTransparency",1)
-            VFX.images[#VFX.images+1]=haze;VFX.images[#VFX.images+1]=core
-            self.plumes[#self.plumes+1]={root=root,haze=haze,core=core,side=side,seed=seed,
-                fraction=(index-.5)/count,count=count,index=index,enabled=true}
+            local root=frame(host,"FlameSlot",UDim2.fromOffset(0,0),UDim2.fromOffset(40,1),nil,1)
+            root.AnchorPoint=Vector2.new(.5,1);root.Active=false
+            local layers={}
+            for layer=1,2 do
+                local image=imageLabel(root,layer==1 and "FlameHaze" or "FlameCore",UDim2.fromScale(.5,1),UDim2.fromOffset(40,45))
+                image.AnchorPoint=Vector2.new(.5,1);image.ScaleType=Enum.ScaleType.Stretch;image.Active=false
+                -- Complementary phase envelopes keep the roots alive continuously.
+                -- Narrower sprites retain real flame silhouettes instead of a
+                -- single wide, flattened texture stretched along an entire edge.
+                local colors=layer==1 and {C.rose,C.violet,C.deep} or {C.ice,C.light,C.violet}
+                local wash=gradient(image,colors,90)
+                wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),
+                    NumberSequenceKeypoint.new(.28,0),NumberSequenceKeypoint.new(.78,.06),NumberSequenceKeypoint.new(1,.56)})
+                alpha(image,"ImageTransparency",1)
+                layers[layer]=image;VFX.images[#VFX.images+1]=image
+            end
+            self.plumes[#self.plumes+1]={root=root,layers=layers,side=side,seed=seed,
+                fraction=(index-.5+(noise(seed+3)-.5)*.44)/count,count=count,rate=.39+noise(seed)*.13,
+                spread=.95+noise(seed+1)*.20,height=.73+noise(seed+2)*.55}
         end
     end
     self.stream=frame(host,"EdgeEnergy",UDim2.fromOffset(0,0),UDim2.fromOffset(small and 15 or 28,1),C.chrome,.65)
@@ -553,118 +589,47 @@ function FireAura.new(parent,name,scope,counts,particleCount,small)
     VFX.auras[#VFX.auras+1]=self
     return self
 end
-function FireAura:quality(preset)
-    self.preset=preset
-    for _,p in ipairs(self.plumes) do
-        -- Rank samples are interleaved so all four edges retain coverage at Low.
-        local rank=(p.index-1)*.61803398875%1
-        p.enabled=rank<preset.density;p.root.Visible=p.enabled;p.haze.Visible=preset.glow
-    end
-    self.particles:quality(preset)
-    self.glint.Visible=preset.reflections
-end
 function FireAura:update(time,burst)
     local w,h=self.host.Size.X.Offset,self.host.Size.Y.Offset
     if w<20 or h<20 then return end
-    local scale=self.small and .6 or 1
-    for side,veil in ipairs(self.veils) do
-        local length=(20+math.sin(time*.8+self.seed+side)*3)*scale
-        local x,y,rotation=sidePoint(side,.5,w,h,length*.28,0)
-        veil.Position=UDim2.fromOffset(x,y);veil.Rotation=rotation
-        veil.Size=UDim2.fromOffset(math.max(12,(side%2==1 and w or h)-12),length)
-        alpha(veil,"ImageTransparency",.89-math.sin(time*.7+side+self.seed)^2*.035-burst*.025)
-    end
+    local scale=self.small and .43 or 1
     for _,p in ipairs(self.plumes) do
-        if p.enabled then
-            local age=(time*(.22+noise(p.seed)*.11)+p.seed)%1
-            local envelope=math.sin(age*math.pi)^1.3
-            local breath=math.sin(time*1.8+p.seed*4)*.5+math.sin(time*2.7+p.seed)*.25
-            local length=(24+age*17+breath*4)*scale
-            local span=(p.side%2==1 and w or h)-36
-            local width=math.max(30*scale,span/p.count)*(1.12+noise(p.seed+1)*.28)+breath*3*scale
-            local x,y,rotation=sidePoint(p.side,p.fraction,w,h,length*.34+age*4,math.sin(time*.8+p.seed*5)*4*scale)
-            p.root.Position=UDim2.fromOffset(x,y)
-            p.root.Size=UDim2.fromOffset(width,length)
-            p.root.Rotation=rotation+math.sin(time*1.3+p.seed)*7
-            p.core.Position=UDim2.fromScale(.5+math.sin(time*1.1+p.seed)*.035,.5)
-            alpha(p.core,"ImageTransparency",1-envelope*(.46+burst*.07))
-            if self.preset.glow then alpha(p.haze,"ImageTransparency",1-envelope*(.16+burst*.035)) end
+        local span=math.max(8,(p.side%2==1 and w or h)-36)
+        local width=math.clamp(span/p.count*1.7,30*scale,72*scale)*p.spread
+        local bend=math.sin(time*1.24+p.seed*2)*.65+math.sin(time*2.13-p.seed)*.35
+        local x,y,rotation=sidePoint(p.side,p.fraction,w,h,-3*scale,math.sin(time*.72+p.seed)*2*scale)
+        p.root.Position=UDim2.fromOffset(x,y)
+        p.root.Size=UDim2.fromOffset(width,1)
+        p.root.Rotation=rotation
+        for layer,image in ipairs(p.layers) do
+            local age=(time*p.rate+p.seed+(layer-1)*.5)%1
+            -- Zero slope at both ends: changing to the next rising strand has
+            -- neither an opacity flash nor a visible size/position discontinuity.
+            local envelope=math.sin(age*math.pi)^2
+            local length=(32+age*31+math.sin(time*1.6+p.seed+layer)*3)*scale*p.height
+            image.Size=UDim2.new(layer==1 and 1.12 or .95,0,0,length)
+            image.Position=UDim2.new(.5,scale*(bend*3+math.sin(age*math.pi)*3*(layer==1 and -1 or 1)),1,2*scale)
+            image.Rotation=bend*(layer==1 and -7 or 9)
+            local strength=layer==1 and .60 or .86
+            alpha(image,"ImageTransparency",1-envelope*math.min(.94,strength+burst*.07))
         end
     end
     self.particles:update(time,w,h)
-    -- Local energy travels around the contour. The whole rim never flashes.
-    local x,y,angle=contourPoint((time*.055+self.seed)%1,w,h)
+    local x,y,angle=contourPoint((time*.065+self.seed)%1,w,h)
     self.stream.Position=UDim2.fromOffset(x,y);self.stream.Rotation=angle
-    alpha(self.stream,"BackgroundTransparency",.65-.1*math.sin(time*.9+self.seed)^2-burst*.1)
-    if self.preset.reflections then
-        local cycle=(time+self.seed*4)%7.7
-        local intensity=cycle<.8 and math.sin(cycle/.8*math.pi)^2*.5 or 0
-        local c=math.floor((time+self.seed*4)/7.7)%4
-        self.glint.Position=UDim2.fromOffset(c%2==0 and -4 or w+4,c<2 and -4 or h+4)
-        alpha(self.glint,"BackgroundTransparency",1-intensity)
-        alpha(self.glintCross,"BackgroundTransparency",1-intensity)
-    end
+    alpha(self.stream,"BackgroundTransparency",.63-.1*math.sin(time*.9+self.seed)^2-burst*.1)
+    local cycle=(time+self.seed*4)%7.7
+    local intensity=cycle<.8 and math.sin(cycle/.8*math.pi)^2*.5 or 0
+    local c=math.floor((time+self.seed*4)/7.7)%4
+    self.glint.Position=UDim2.fromOffset(c%2==0 and -4 or w+4,c<2 and -4 or h+4)
+    alpha(self.glint,"BackgroundTransparency",1-intensity)
+    alpha(self.glintCross,"BackgroundTransparency",1-intensity)
 end
-UI.dockAura=FireAura.new(UI.window,"DockAura","window",{3,6,3,6},8,false)
-UI.panelAura=FireAura.new(UI.window,"PanelAura","pane",{9,4,9,4},14,false)
-UI.launcherAura=FireAura.new(UI.launcher,"LauncherAura","launcher",{2,2,2,2},4,true)
+UI.dockAura=FireAura.new(UI.window,"DockAura","window",{4,8,4,8},10,false)
+UI.panelAura=FireAura.new(UI.window,"PanelAura","pane",{12,7,12,7},16,false)
+UI.launcherAura=FireAura.new(UI.launcher,"LauncherAura","launcher",{3,3,3,3},6,true)
 UI.launcherAura.host.Size=UDim2.fromOffset(68,68)
 
--- Quality changes only VFX budgets. All control positions, dimensions, icons,
--- hitboxes and content remain identical. Recovery is slower than degradation.
-UI.qualityCard=frame(pages.Settings,"QualityCard",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,208),Color3.new(1,1,1))
-corner(UI.qualityCard,13);gradient(UI.qualityCard,{C.panel,C.black},105);stroke(UI.qualityCard,C.line,.3)
-UI.qualityTitle=label(UI.qualityCard,"QualityTitle","Visual quality",UDim2.fromOffset(14,8),UDim2.new(1,-28,0,30),17,C.white,optionFont)
-UI.qualityHint=label(UI.qualityCard,"QualityHint","Adapts to performance",UDim2.fromOffset(14,38),UDim2.new(1,-28,0,30),12,C.muted)
-UI.qualityHint.TextWrapped=true
-UI.qualityButtons={}
-for i,name in ipairs(Quality.names) do
-    local b,fx=button(UI.qualityCard,"Quality_"..name,UDim2.fromOffset(12,76+(i-1)*42),UDim2.new(1,-24,0,36))
-    local caption=label(b,"Caption",name,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),15,C.silver,optionFont)
-    UI.qualityButtons[name]={button=b,fx=fx,caption=caption}
-end
-UI.qualityStatus=label(pages.Settings,"QualityStatus","",UDim2.fromOffset(4,221),UDim2.new(1,-12,0,44),12,C.muted)
-UI.qualityStatus.TextWrapped=true
-pages.Settings.CanvasSize=UDim2.fromOffset(0,276)
-function Quality:apply(level)
-    self.level=level
-    local preset=self.presets[level]
-    for _,aura in ipairs(VFX.auras) do aura:quality(preset) end
-    UI.gui:SetAttribute("EffectiveQuality",self.names[level])
-    UI.gui:SetAttribute("VFXRate",preset.fps)
-    UI.qualityStatus.Text="Active: "..self.names[level]..(self.names[level]~=self.requested and " · adjusted for performance" or "")
-    for name,option in pairs(UI.qualityButtons) do
-        local selected=name==self.requested;option.fx.selected=selected
-        tween(option.fx.selection,.22,{Value=selected and 1 or 0})
-        option.caption.TextColor3=selected and C.white or C.muted
-    end
-end
-function Quality:choose(name)
-    local level=table.find(self.names,name)
-    if not level then UI.gui:SetAttribute("VisualQuality",self.requested);return end
-    self.requested=name;self.bad=0;self.good=0;self.cooldown=3
-    UI.gui:SetAttribute("VisualQuality",name);self:apply(level)
-end
-function Quality:sample(dt)
-    -- Ignore resume/debugger stalls; they are not sustained rendering pressure.
-    if dt<=0 or dt>.25 then self.bad=0;self.good=0;return end
-    self.smooth+=(dt-self.smooth)*math.min(1,dt*2)
-    self.cooldown=math.max(0,self.cooldown-dt)
-    if self.cooldown>0 then return end
-    self.bad=self.smooth>1/42 and self.bad+dt or 0
-    self.good=self.smooth<1/55 and self.good+dt or 0
-    if self.bad>=2.5 and self.level>1 then
-        self.bad=0;self.good=0;self.cooldown=4;self:apply(self.level-1)
-    elseif self.good>=10 and self.level<table.find(self.names,self.requested) then
-        self.bad=0;self.good=0;self.cooldown=8;self:apply(self.level+1)
-    end
-end
-for name,option in pairs(UI.qualityButtons) do connect(option.button.Activated,function() Quality:choose(name) end) end
-connect(UI.gui:GetAttributeChangedSignal("VisualQuality"),function()
-    local requested=UI.gui:GetAttribute("VisualQuality")
-    if requested~=Quality.requested then Quality:choose(requested) end
-end)
-Quality:choose(DEFAULT_QUALITY)
 -- Put the existing labels/icons inside the press surface, while the original
 -- TextButton's touch/click rectangle remains stationary and full-sized.
 for _,record in ipairs(buttons) do
@@ -727,7 +692,7 @@ local function resize(initial)
         n.icon.Visible=dw>=120
         n.caption.Position=UDim2.fromOffset(dw>=150 and 45 or (dw<120 and 12 or 36),0)
         n.caption.Size=UDim2.new(1,dw>=150 and -51 or (dw<120 and -20 or -39),1,0)
-        n.caption.TextSize=dw>=150 and 17 or 15
+        n.caption.TextSize=dw>=150 and 19 or 17
     end
     UI.selectionLight.Position=UDim2.fromOffset(0,(navigation[state.page].index-1)*step+(step-23)/2)
     local controlW=math.floor((dw-24-12)/3)
@@ -801,7 +766,7 @@ local function selectPage(name,toggle)
     local page=pages[name];page.CanvasPosition=Vector2.zero
     pcall(function() page:ResetScrollVelocity() end)
     UI.pageTitle.Text=name
-    UI.pageTitle.Font=name=="Home" and Enum.Font.GothamBold or optionFont
+    UI.pageTitle.FontFace=optionFont
     for other,n in pairs(navigation) do
         local selected=other==name
         n.fx.selected=selected
@@ -897,10 +862,15 @@ connect(Input.InputBegan,function(input,processed)
     end
 end)
 
--- Original transparent logos/controls plus one purpose-made fire sprite.
+-- Original logos/controls, supplied option icons/background and shared fire sprite.
 -- The previous wordmark PNG remains in the repository but is no longer loaded.
 -- Custom PNGs need the executor's local asset API; failure never blocks the GUI.
 local ASSETS={
+    IconHome={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-home-v1.png",file="ReyznX-icon-home-v1.png",bytes=1933132,images=artworkImages.IconHome},
+    IconMain={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-main-v1.png",file="ReyznX-icon-main-v1.png",bytes=2142879,images=artworkImages.IconMain},
+    IconScripts={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-scripts-v1.png",file="ReyznX-icon-scripts-v1.png",bytes=2546120,images=artworkImages.IconScripts},
+    IconSettings={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-settings-v1.png",file="ReyznX-icon-settings-v1.png",bytes=1892474,images=artworkImages.IconSettings},
+    Background={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/background-cyber-v1.png",file="ReyznX-background-cyber-v1.png",bytes=167325,images=artworkImages.Background},
     R={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/launcher-r-v1.png",file="ReyznX-launcher-r-v1.png",bytes=2136070,images={UI.launcherImage,UI.recoveryImage}},
     X={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/emblem-x-v1.png",file="ReyznX-emblem-x-v1.png",bytes=1699126,images={UI.xImage,UI.xGlow}},
     Fire={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/flame-wisp-v1.png",file="ReyznX-flame-wisp-v1.png",bytes=1172326,images=VFX.images},
@@ -970,7 +940,6 @@ UI.gui:SetAttribute("Minimized",false)
 updateClock();refreshAlpha();transition("open")
 connect(RunService.Heartbeat,function(dt)
     updateClock()
-    Quality:sample(dt)
     if state.finishAt>0 and os.clock()>=state.finishAt then
         state.finishAt=0
         if state.target=="closed" then UI.gui:Destroy();return end
@@ -980,7 +949,7 @@ connect(RunService.Heartbeat,function(dt)
     end
     state.budget+=dt
     state.effectElapsed=(state.effectElapsed or 0)+dt
-    local interval=1/Quality.presets[Quality.level].fps
+    local interval=1/VFX_RATE
     if state.budget<interval then return end
     local elapsed=state.effectElapsed;state.effectElapsed=0
     state.budget=state.budget%interval;state.phase+=elapsed
@@ -1001,10 +970,17 @@ connect(RunService.Heartbeat,function(dt)
         if not UI.xFallback.Visible then UI.gui:SetAttribute("AssetX","ready") end
         if not UI.rFallback.Visible then UI.gui:SetAttribute("AssetR","ready") end
         if VFX.images[1].Image~="" and VFX.images[1].IsLoaded then UI.gui:SetAttribute("AssetFire","ready") end
+        for _,sprite in ipairs(iconSprites) do
+            local ready=sprite.image.Image~="" and sprite.image.IsLoaded
+            for _,line in ipairs(sprite.fallback) do line.Visible=not ready end
+            if ready then UI.gui:SetAttribute("Asset"..sprite.key,"ready") end
+        end
+        if artworkImages.Background[1].Image~="" and artworkImages.Background[1].IsLoaded then
+            UI.gui:SetAttribute("AssetBackground","ready")
+        end
     end
     local visibleTarget=state.target=="minimized" and UI.launcher or UI.window
     if state.finishAt==0 and offscreen(visibleTarget) then return end
-    alpha(UI.launcherRim,"Transparency",.5+pulse*.18-.2*state.burst)
     if UI.launcher.Visible then UI.launcherAura:update(p,state.burst) end
     VFX.reflections:update(elapsed)
     if state.target=="minimized" and state.finishAt==0 then return end
@@ -1012,6 +988,7 @@ connect(RunService.Heartbeat,function(dt)
     if UI.panelAura.host.Visible then UI.panelAura:update(p+.63,state.burst) end
     for i,fx in ipairs(VFX.surfaces) do
         if i==1 or UI.panelAura.host.Visible then
+            fx.inward:update(p,state.burst)
             local breath=.5+.5*math.sin(p*.65+i*1.7)
             alpha(fx.beam,"BackgroundTransparency",.72-.12*breath-.12*state.burst)
             fx.beamGradient.Offset=Vector2.new(math.sin(p*.18+i)*.34,0)

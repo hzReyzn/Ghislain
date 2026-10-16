@@ -4,6 +4,10 @@ return function(source)
     local URL='https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/'
     local function png(bytes) return '\137PNG\13\10\26\10'..'\0\0\0\13IHDR'..string.rep('a',bytes-24)..'IEND\174\66\96\130' end
     local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['flame-wisp-v1.png']=png(1172326),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
+    for name,bytes in pairs({['icon-home-v1.png']=1933132,['icon-main-v1.png']=2142879,
+        ['icon-scripts-v1.png']=2546120,['icon-settings-v1.png']=1892474,['background-cyber-v1.png']=167325}) do
+        artwork[name]=png(bytes)
+    end
     local function setup(width,height)
         local w=newWorld();w.viewport={X=width or 1280,Y=height or 720}
         for name,data in pairs(artwork) do w.http[URL..name]=data end
@@ -27,18 +31,19 @@ return function(source)
         w.services.UserInputService.InputChanged:Fire(change)
         w.services.UserInputService.InputEnded:Fire(input)
     end
-    test('clean interface, original requested identity and four font changes',function()
+    test('clean interface, retained identity and native Rajdhani option labels',function()
         local w,gui=launch();w.step(30)
-        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.2.0')
+        assert(gui.ResetOnSpawn==false and gui:GetAttribute('Version')=='2.3.0')
         assert(find(gui,'UserID').Text=='ID  123' and find(gui,'SessionTime').Text=='00:00:00')
         assert(w.thumbnailRequest.id==123 and w.thumbnailRequest.kind.Name=='HeadShot')
         assert(find(gui,'Avatar').Image=='rbxthumb://test-avatar')
         assert(find(gui,'Credit').Text=='Made By Reyzn')
         for _,name in ipairs({'Main','Visuals','Scripts','Settings'}) do
-            assert(find(gui,'Tab_'..name):FindFirstChild('Caption',true).Font.Name=='BuilderSansMedium')
-            if name~='Settings' then assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty') end
+            assert(find(gui,'Tab_'..name):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
+            assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty')
         end
-        assert(find(gui,'Tab_Home'):FindFirstChild('Caption',true).Font.Name=='GothamMedium')
+        assert(find(gui,'Tab_Home'):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
+        assert(find(gui,'PageTitle').FontFace.Weight.Name=='SemiBold')
         local banned={'Your Workspace','YOUR WORKSPACE','WORKSPACE','Make it yours','Choose your accent','A clean slate','A new space','Themes','Key System','Featured Scripts','Links','Ghislain','Built for gamers','Play • Exploit • Dominate'}
         for _,o in ipairs(gui:GetDescendants())do
             for _,text in ipairs(banned) do assert(not (o.Text or ''):find(text,1,true),'unnecessary text: '..text) end
@@ -51,7 +56,7 @@ return function(source)
     end)
     test('supplied PNGs load once, register locally and preserve transparency',function()
         local w,gui=launch();w.step(30)
-        assert(#w.requests==6 and #w.writes==6)
+        assert(#w.requests==11 and #w.writes==11)
         assert(w.files['ReyznX-launcher-r-v1.png']==artwork['launcher-r-v1.png'])
         assert(w.files['ReyznX-emblem-x-v1.png']==artwork['emblem-x-v1.png'])
         assert(find(gui,'EmblemX').Image=='mock://ReyznX-emblem-x-v1.png')
@@ -63,7 +68,7 @@ return function(source)
         click(gui,'Minimize');w.step(30)
         assert(find(gui,'LauncherR').ImageTransparency==0 and find(gui,'Launcher').BackgroundTransparency==1)
         local again=w.run(source);w.step(30)
-        assert(gui.Parent==nil and #w.requests==6 and #w.writes==6,'valid cache was downloaded again')
+        assert(gui.Parent==nil and #w.requests==11 and #w.writes==11,'valid cache was downloaded again')
         close(w,again)
     end)
     test('only selected section opens to the right; dock works on its own',function()
@@ -232,7 +237,7 @@ return function(source)
         local broken=setup();broken.http[URL..'emblem-x-v1.png']='<html>not an image</html>'
         local g=broken.run(source);broken.step(90)
         assert(g:GetAttribute('AssetX')=='failed' and find(g,'XFallback').Visible)
-        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==7)
+        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==12)
         click(g,'Tab_Main');broken.step(30);assert(g:GetAttribute('Page')=='Main');close(broken,g)
     end)
     test('missing asset APIs/network/write errors leave controls and clock usable',function()
@@ -244,7 +249,7 @@ return function(source)
             else w.assetApiFailure=true end
             local gui=w.run(source);w.step(100)
             assert(find(gui,'XFallback').Visible and gui:GetAttribute('ElapsedSeconds')>=1)
-            assert(#w.requests<=12,'unbounded retries')
+            assert(#w.requests<=22,'unbounded retries')
             click(gui,'Minimize');w.step(30);assert(find(gui,'Launcher').Visible)
             click(gui,'Launcher');w.step(30);assert(find(gui,'Dock').BackgroundTransparency==0)
             close(w,gui)
@@ -297,7 +302,7 @@ return function(source)
         click(gui,'Launcher');w.step(30);close(w,gui)
     end)
     test('fire and particle pools animate outside surfaces without allocations or input capture',function()
-        local w,gui=launch();w.step(30);gui:SetAttribute('VisualQuality','High');w.step(20)
+        local w,gui=launch();w.step(30);w.step(20)
         local dock,panel,launcher=find(gui,'DockAura'),find(gui,'PanelAura'),find(gui,'LauncherAura')
         assert(dock.Parent==find(gui,'Window') and panel.Parent==find(gui,'Window'))
         assert(not panel:IsDescendantOf(find(gui,'PanelReveal')) and launcher.Parent==find(gui,'Launcher'))
@@ -311,10 +316,10 @@ return function(source)
                 if o.Name=='EdgeParticle'then particles+=1 end
             end
         end
-        assert(fire==52 and particles==26,'unbounded effect pools')
-        local plume=dock:FindFirstChild('FlameSlot');local length=plume.Size.Y.Offset
+        assert(fire==74 and particles==32,'unbounded effect pools')
+        local plume=dock:FindFirstChild('FlameSlot');local length=plume:FindFirstChild('FlameCore').Size.Y.Offset
         local objects=#w.objects;w.step(120)
-        assert(#w.objects==objects and plume.Size.Y.Offset~=length,'frozen or allocating effect')
+        assert(#w.objects==objects and plume:FindFirstChild('FlameCore').Size.Y.Offset~=length,'frozen or allocating effect')
         for _,aura in ipairs({dock,panel})do
             for _,particle in ipairs(aura:GetChildren())do
                 if particle.Name=='EdgeParticle' and particle.Visible then
@@ -332,45 +337,89 @@ return function(source)
         click(gui,'Launcher');w.step(30);assert(logoFlame.ImageTransparency==1)
         close(w,gui)
     end)
-    test('quality selector changes budgets, preserves geometry and never recreates pools',function()
+    test('Ultra High stays fixed under sustained load; performance controls are absent',function()
         local w,gui=launch(844,354);w.step(30)
-        assert(gui:GetAttribute('VisualQuality')=='Medium','touch default too costly')
-        local win=find(gui,'Window');local x,y=win.Position.X.Offset,win.Position.Y.Offset
-        local width,height=win.Size.X.Offset,win.Size.Y.Offset;local objects=#w.objects
-        local previousCount=0
+        assert(gui:GetAttribute('VisualQuality')=='Ultra High' and gui:GetAttribute('VFXRate')==60)
+        for _,name in ipairs({'QualityCard','QualityStatus','Quality_Low','Quality_Medium','Quality_High','LauncherHalo','ContactShadow'}) do
+            assert(not gui:FindFirstChild(name,true),'obsolete visual/control '..name)
+        end
+        local win=find(gui,'Window');local pos,size=win.Position,win.Size;local objects=#w.objects
         click(gui,'Tab_Settings');w.step(30)
-        for _,name in ipairs({'Low','Medium','High'})do
-            click(gui,'Quality_'..name);w.step(30)
-            assert(gui:GetAttribute('VisualQuality')==name and gui:GetAttribute('EffectiveQuality')==name)
+        assert(#find(gui,'Page_Settings'):GetChildren()==0)
+        for _,dt in ipairs({1/20,1/30,1/120}) do
+            w.step(240,dt)
+            assert(gui:GetAttribute('EffectiveQuality')=='Ultra High' and gui:GetAttribute('VFXRate')==60)
             local active=0
-            for _,auraName in ipairs({'DockAura','PanelAura','LauncherAura'})do
-                for _,o in ipairs(find(gui,auraName):GetChildren())do
-                    if o.Visible and (o.Name=='FlameSlot' or o.Name=='EdgeParticle')then active+=1 end
+            for _,auraName in ipairs({'DockAura','PanelAura','LauncherAura'}) do
+                for _,o in ipairs(find(gui,auraName):GetChildren()) do
+                    if o.Name=='FlameSlot' and o.Visible then active+=1 end
                 end
             end
-            assert(active>previousCount);previousCount=active
-            assert(find(gui,'DockAura'):FindFirstChild('FlameSlot'):FindFirstChild('FlameHaze').Visible==(name~='Low'))
-            near(win.Position.X.Offset,x);near(win.Position.Y.Offset,y)
-            near(win.Size.X.Offset,width);near(win.Size.Y.Offset,height)
-            assert(#w.objects==objects)
+            assert(active==74 and #w.objects==objects,'quality was reduced or pools recreated')
         end
+        near(win.Position.X.Offset,pos.X.Offset);near(win.Position.Y.Offset,pos.Y.Offset)
+        near(win.Size.X.Offset,size.X.Offset);near(win.Size.Y.Offset,size.Y.Offset)
         close(w,gui)
     end)
-    test('adaptive quality has hysteresis and respects the chosen maximum',function()
+    test('supplied icons map correctly; exact transparencies survive reversed transitions',function()
         local w,gui=launch();w.step(30)
-        w.step(200,1/30)
-        assert(gui:GetAttribute('EffectiveQuality')=='Low','sustained low FPS did not lower budget')
-        assert(gui:GetAttribute('VisualQuality')=='Medium','adaptation overwrote user choice')
-        w.step(180,1/60)
-        assert(gui:GetAttribute('EffectiveQuality')=='Low','quality bounced back too soon')
-        w.step(900,1/60)
-        assert(gui:GetAttribute('EffectiveQuality')=='Medium','budget did not recover')
-        click(gui,'Quality_Low');w.step(850,1/60)
-        assert(gui:GetAttribute('EffectiveQuality')=='Low','exceeded selected cap')
-        gui:SetAttribute('VisualQuality','High');w.step(30)
-        assert(gui:GetAttribute('EffectiveQuality')=='High')
-        w.step(1,.8);w.step(60)
-        assert(gui:GetAttribute('EffectiveQuality')=='High','one background stall downgraded quality')
+        for _,name in ipairs({'Home','Main','Scripts','Settings'}) do
+            local tab=find(gui,'Tab_'..name)
+            local art=find(tab,'OptionArtwork')
+            assert(art.Image=='mock://ReyznX-icon-'..name:lower()..'-v1.png')
+            near(art.ImageTransparency,.85)
+            assert(art.ScaleType.Name=='Fit' and not art.Active)
+            assert(not art.Parent:FindFirstChild('Line').Visible,'native icon overlaps PNG')
+        end
+        assert(not find(gui,'Tab_Visuals'):FindFirstChild('OptionArtwork',true),'invented a fifth icon')
+        assert(find(find(gui,'Shortcut_Main'),'OptionArtwork').Image=='mock://ReyznX-icon-main-v1.png')
+        assert(not find(gui,'Launcher'):FindFirstChildOfClass('UIStroke'))
+        for cycle=1,5 do
+            click(gui,'Minimize');w.step(cycle%2==0 and 6 or 30)
+            click(gui,'Launcher');w.step(30)
+            click(gui,'Collapse');w.step(5);click(gui,'Tab_Main');w.step(30)
+            near(find(find(gui,'Tab_Main'),'OptionArtwork').ImageTransparency,.85)
+            for _,surface in ipairs({'Dock','Panel'}) do
+                local bg=find(find(gui,surface),'InterfaceBackground')
+                assert(bg.Image=='mock://ReyznX-background-cyber-v1.png' and bg.ScaleType.Name=='Crop')
+                near(bg.ImageTransparency,.76);assert(not bg.Active)
+            end
+        end
+        close(w,gui)
+        local broken=setup();broken.http[URL..'icon-home-v1.png']='invalid'
+        local g=broken.run(source);broken.step(90)
+        assert(find(find(g,'Tab_Home'),'Icon_home'):FindFirstChild('Line').Visible)
+        click(g,'Tab_Main');broken.step(30);assert(g:GetAttribute('Page')=='Main')
+        close(broken,g)
+    end)
+    test('fire crossfades continuously; inward lights remain inside panels without bottom shadows',function()
+        local w,gui=launch();w.step(30)
+        local slot=find(find(gui,'DockAura'),'FlameSlot')
+        local core,haze=find(slot,'FlameCore'),find(slot,'FlameHaze')
+        local last=core.ImageTransparency;local changed=0
+        for i=1,180 do
+            w.step(1,1/60)
+            local value=core.ImageTransparency
+            assert(math.abs(value-last)<.06,'fire opacity popped at a cycle boundary')
+            assert((1-value)+(1-haze.ImageTransparency)>.59,'both layers faded out together')
+            if value~=last then changed+=1 end
+            last=value
+        end
+        assert(changed>170,'fire still updates only at the old 30 Hz rate')
+        for _,name in ipairs({'Dock','Panel'}) do
+            local light=find(find(gui,name),'InwardLight')
+            local field=light:FindFirstChild('InwardGlow');local p=field.Position
+            w.step(10)
+            assert(field.Position.X.Scale~=p.X.Scale,'inner illumination is static')
+            for _,child in ipairs(light:GetChildren()) do
+                if child:IsA('GuiObject') then
+                    assert(not child.Active)
+                    local lp,ls=light.AbsolutePosition,light.AbsoluteSize
+                    local cp,cs=child.AbsolutePosition,child.AbsoluteSize
+                    assert(cp.X>=lp.X and cp.Y>=lp.Y and cp.X+cs.X<=lp.X+ls.X+.01 and cp.Y+cs.Y<=lp.Y+ls.Y+.01,'light escapes surface')
+                end
+            end
+        end
         close(w,gui)
     end)
     test('button press scales its face only, retains action and releases owned touch',function()

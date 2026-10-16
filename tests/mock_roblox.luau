@@ -75,9 +75,10 @@ local function newWorld()
     env.UDim2={new=function(x,xo,y,yo)return {X={Scale=x,Offset=xo},Y={Scale=y,Offset=yo}}end}
     env.UDim2.fromScale=function(x,y)return env.UDim2.new(x,0,y,0)end
     env.UDim2.fromOffset=function(x,y)return env.UDim2.new(0,x,0,y)end
-    for _,key in ipairs({"ColorSequence","ColorSequenceKeypoint","NumberSequence","NumberSequenceKeypoint","NumberRange","TweenInfo","Font"}) do
+    for _,key in ipairs({"ColorSequence","ColorSequenceKeypoint","NumberSequence","NumberSequenceKeypoint","NumberRange","TweenInfo"}) do
         env[key]={new=function(...)return {...}end}
     end
+    env.Font={new=function(family,weight,style) return {Family=family,Weight=weight,Style=style} end}
     env.Enum=setmetatable({}, {__index=function(t,k)
         local group=setmetatable({}, {__index=function(a,b)local e={Name=b,Value=1};rawset(a,b,e);return e end})
         rawset(t,k,group);return group

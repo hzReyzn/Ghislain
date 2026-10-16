@@ -1,8 +1,24 @@
-# Recursos de Reyzn X 2.2
+# Recursos de Reyzn X 2.3
 
 `launcher-r-v1.png`, `emblem-x-v1.png`, `minimize-v1.png`, `collapse-v1.png` y `close-v1.png` conservan exactamente sus bytes originales. `wordmark-v1.png` se conserva archivado y ya no se utiliza en el GUI.
 
-## Nueva textura
+## Recursos suministrados para 2.3
+
+Se copiaron sin convertir, retocar, recolorear ni comprimir sus bytes originales:
+
+| Archivo | Adjunto | Uso | Transparencia |
+|---|---|---|---:|
+| `icon-home-v1.png` | `03-1000190897.png` | Home | 85% |
+| `icon-main-v1.png` | `02-1000190899.png` | Main y acceso directo | 85% |
+| `icon-scripts-v1.png` | `01-1000190900.png` | Scripts | 85% |
+| `icon-settings-v1.png` | `04-1000190895.png` | Settings | 85% |
+| `background-cyber-v1.png` | `05-1000190889.png` | Fondo del menú y panel | 76% |
+
+Los cuatro iconos son RGBA de 1312 × 1199; el fondo es RGB de 1536 × 864. La transparencia solicitada se aplica en Roblox, sin modificar los PNG. No se suministró un icono de Visuals, por lo que conserva su forma nativa. La retirada del contorno del logo afecta al `UIStroke` adicional del GUI; el recurso R personalizado se mantiene intacto.
+
+Rajdhani se usa como fuente nativa de Roblox, sin descargar un TTF en tiempo de ejecución: [Rajdhani, publicada por Roblox](https://create.roblox.com/store/asset/12187375422/). El script usa `Font.new` y `FontFace` con el peso SemiBold.
+
+## Textura de fuego conservada de 2.2
 
 - Archivo: `assets/reyzn-x/flame-wisp-v1.png`.
 - PNG RGBA de 1254 × 1254, 1 172 326 bytes, transparencia original conservada.
