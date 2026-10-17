@@ -6,9 +6,19 @@ Made By Reyzn.
 
 ```lua
 local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-local source = game:HttpGet(url .. "?build=cyan-flow-20261016&t=" .. tostring(os.time()))
+local source = game:HttpGet(url .. "?build=no-fall-toggle-20261017&t=" .. tostring(os.time()))
 loadstring(source)()
 ```
+
+## Main: No Fall Damage
+
+Main contiene una única tarjeta compacta, con los textos **No Fall Damage** y **OFF / ON**, sin descripción. Cada ejecución empieza en **OFF**. El diseño apagado es carbón y gris; al activar aparecen el neón celeste/amatista, un destello breve y una compresión suave del botón. Al apagar, el destello se cancela y el brillo se desvanece. La tarjeta mide hasta 340 × 60 px; en pantallas estrechas acomoda el estado debajo del título, sin agrandar el Hub.
+
+Se integra el mecanismo del código suministrado: guardar la velocidad de `HumanoidRootPart`, ponerla a cero en `Heartbeat` y restaurarla en `RenderStepped`. Su comprobación de juego se conserva: **Natural Disaster Survival, PlaceId 189707**. En otros lugares permanece OFF y se informa por consola, sin cerrar el GUI ni añadir textos al panel. Se omite la escritura al portapapeles del ejemplo porque no forma parte del efecto.
+
+El controlador conserva ON al morir, reaparecer, cambiar de sección, plegar, minimizar o arrastrar el GUI fuera de pantalla. Mientras falta el personaje o su raíz, sigue habilitado y espera sus eventos; no crea esperas bloqueantes. También admite una raíz reemplazada dentro del mismo personaje. Solo OFF manual o la destrucción completa del GUI desconectan el efecto. Reejecutar destruye primero la instancia anterior y empieza de nuevo en OFF.
+
+La adaptación evita acumular `RenderStepped:Wait()` dentro de Heartbeat. Mantiene una sola restauración pendiente, la libera antes de física si no hubo renderizado y descarta callbacks de activaciones anteriores. OFF y cierre restauran el valor pendiente si todavía corresponde a la escritura del controlador; una velocidad nueva distinta de cero aplicada por otro script se respeta. No modifica salud, colisiones, gravedad ni estados del Humanoid. Esto reduce conflictos, pero no garantiza compatibilidad con cualquier controlador externo ni la cancelación del daño calculado por el servidor: esas dos cosas requieren probarse en el juego real.
 
 ## Fuego compartido, neón celeste y aviso de carga
 
@@ -53,7 +63,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Las cuatro últimas páginas siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -63,7 +73,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Recursos y ejecución
 
-El código completo está en **Reyzn X.lua**. `UpdraftFire`, `NeonFlow`, `LoadToast`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar.
+El código completo está en **Reyzn X.lua**. `UpdraftFire`, `NeonFlow`, `LoadToast`, `FeatureToggle`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat visual, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar. `NoFallDamage` tiene conexiones independientes mientras está ON, para que el comportamiento no dependa de la visibilidad ni de la frecuencia de los VFX. Sus listas de conexiones se vacían en OFF y al cerrar.
 
 El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los doce recursos fijos del repositorio son once PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una descarga falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El contenido descargado por el GUI nunca se ejecuta: solo son imágenes.
 
@@ -77,6 +87,8 @@ Los PNG originales y el JPEG se conservan sin modificaciones. [ASSET_NOTES.md](a
 python tests/run.py /ruta/a/luau
 ```
 
-El comando compila el Luau, comprueba el formato y tamaño de los doce recursos reales y ejecuta **33 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable, barrido del emblema sin saltos, fuego ascendente sin asignaciones por fotograma, gestos del logo, temporización y limpieza del aviso, cambios de orientación, descargas que terminan después de desaparecer la notificación, dirección y paleta del fuego compartido, neón bajo el contenido y suspensión de las animaciones ocultas.
+El comando compila el Luau, comprueba el formato y tamaño de los doce recursos reales y ejecuta **42 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable, barrido del emblema sin saltos, fuego ascendente sin asignaciones por fotograma, gestos del logo, temporización y limpieza del aviso, cambios de orientación, descargas que terminan después de desaparecer la notificación, dirección y paleta del fuego compartido, neón bajo el contenido y suspensión de las animaciones ocultas.
 
-Las pruebas simulan el cliente. La revisión visual aproximada ayuda a comprobar la distribución, pero ninguna sustituye el renderizado ni la medición de FPS en Roblox/Android.
+Las nueve pruebas nuevas cubren OFF inicial y dimensiones, pulsos/restauración de velocidad, muerte y respawn tardío, raíz reemplazada, efecto independiente de la visibilidad, restauración al apagar y coexistencia con otra escritura, cambios ON/OFF repetidos, callbacks obsoletos, cierre/destrucción/reejecución, bloqueo fuera de PlaceId 189707 y respuesta visual/táctil del control.
+
+Las pruebas simulan el cliente. La revisión visual aproximada ayuda a comprobar la distribución, pero ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.

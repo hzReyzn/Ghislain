@@ -1,5 +1,5 @@
 -- Reyzn X | Made By Reyzn
--- Client GUI only. The fixed HTTP resources below are PNG/JPEG artwork, never code.
+-- Client GUI and opt-in features. Fixed HTTP resources are artwork, never code.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -14,7 +14,7 @@ if previous then previous:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "cyan-flow-20261016"
+local BUILD = "no-fall-toggle-20261017"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -34,6 +34,7 @@ local C = {
 local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
 local UI, connections, threads, tweens = {}, {}, {}, {}
+local features = {}
 local scopes, alphaEntries, alphaLookup = {}, {}, {}
 local factors = {window=0, pane=0, page=0, launcher=0, notification=0, fixed=1}
 
@@ -298,6 +299,87 @@ local function brandText(parent,name,pos,size,pixels)
     return text,metal,outline
 end
 
+-- The supplied Heartbeat -> RenderStepped velocity pulse, with one pending
+-- restoration instead of a yielding coroutine every frame. Its lifetime belongs
+-- to the feature, not the current character, page, window visibility or VFX rate.
+local NoFallDamage={};NoFallDamage.__index=NoFallDamage
+function NoFallDamage.new()
+    return setmetatable({enabled=false,destroyed=false,epoch=0,
+        supported=game.PlaceId==189707,links={},characterLinks={}},NoFallDamage)
+end
+function NoFallDamage:listen(list,signal,callback)
+    local epoch=self.epoch
+    list[#list+1]=signal:Connect(function(...)
+        if self.enabled and not self.destroyed and self.epoch==epoch then callback(...) end
+    end)
+end
+function NoFallDamage:restore()
+    local root,velocity=self.pendingRoot,self.pendingVelocity
+    self.pendingRoot=nil;self.pendingVelocity=nil
+    -- Do not replay an old velocity over a newer nonzero write by another
+    -- controller. Never transfer a previous character's momentum to a new root.
+    if root and root.Parent and not root.Anchored and root.AssemblyLinearVelocity==Vector3.zero then
+        root.AssemblyLinearVelocity=velocity
+    end
+end
+function NoFallDamage:bindCharacter(character)
+    self:restore()
+    for _,c in ipairs(self.characterLinks) do c:Disconnect() end
+    table.clear(self.characterLinks)
+    self.character=character;self.root=nil
+    if not character then return end
+    local function added(child)
+        if self.character~=character or player.Character~=character then return end
+        if child.Name=="HumanoidRootPart" and child:IsA("BasePart") then
+            self:restore();self.root=child
+        end
+    end
+    self:listen(self.characterLinks,character.ChildAdded,added)
+    self:listen(self.characterLinks,character.ChildRemoved,function(child)
+        if self.character==character and child==self.root then self:restore();self.root=nil end
+    end)
+    local root=character:FindFirstChild("HumanoidRootPart")
+    if root then added(root) end
+end
+function NoFallDamage:pulse()
+    self:restore()
+    local root,character=self.root,self.character
+    if not root or not character or character~=player.Character or not character.Parent
+        or root.Parent~=character or root.Anchored then return end
+    self.pendingRoot=root;self.pendingVelocity=root.AssemblyLinearVelocity
+    root.AssemblyLinearVelocity=Vector3.zero
+end
+function NoFallDamage:setEnabled(enabled)
+    if self.destroyed then return false end
+    if enabled and not self.supported then
+        warn("Reyzn X: No Fall Damage is available only in Natural Disaster Survival (189707).")
+        return false
+    end
+    if enabled==self.enabled then return self.enabled end
+    self.enabled=enabled;self.epoch+=1
+    if not enabled then
+        for _,c in ipairs(self.links) do c:Disconnect() end
+        table.clear(self.links);self:bindCharacter(nil)
+        return false
+    end
+    self:listen(self.links,player.CharacterAdded,function(character)
+        if player.Character==character then self:bindCharacter(character) end
+    end)
+    self:listen(self.links,player.CharacterRemoving,function(character)
+        if self.character==character then self:bindCharacter(nil) end
+    end)
+    self:bindCharacter(player.Character)
+    self:listen(self.links,RunService.Heartbeat,function() self:pulse() end)
+    self:listen(self.links,RunService.RenderStepped,function() self:restore() end)
+    -- Restore before physics as well if the renderer pauses or skips a frame.
+    self:listen(self.links,RunService.PreSimulation,function() self:restore() end)
+    return true
+end
+function NoFallDamage:destroy()
+    if self.destroyed then return end
+    self:setEnabled(false);self.destroyed=true
+end
+
 UI.gui=make("ScreenGui",playerGui,{Name="ReyznX",ResetOnSpawn=false,DisplayOrder=50,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,IgnoreGuiInset=false})
 pcall(function() UI.gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets end)
 UI.gui:SetAttribute("Version",VERSION)
@@ -309,6 +391,7 @@ UI.gui:SetAttribute("VFXRate",VFX_RATE)
 local function cleanup()
     if not state.alive then return end
     state.alive=false; state.drag=nil
+    for _,feature in pairs(features) do feature:destroy() end
     for _,c in ipairs(connections) do c:Disconnect() end
     for _,t in pairs(tweens) do t:Cancel() end
     for thread in pairs(threads) do if coroutine.status(thread)~="dead" then pcall(task.cancel,thread) end end
@@ -515,7 +598,8 @@ for _,name in ipairs({"Home","Main","Visuals","Scripts","Settings"}) do
         ClipsDescendants=true,ScrollingDirection=Enum.ScrollingDirection.Y,AutomaticCanvasSize=Enum.AutomaticSize.None,Visible=name=="Home"},"page")
     pages[name]=page
 end
--- The four work pages remain empty. Visual quality is always Ultra High.
+-- Main contains opt-in features; the other three work pages remain empty.
+-- Visual quality is always Ultra High.
 UI.hero=frame(pages.Home,"Hero",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,200),Color3.new(1,1,1))
 corner(UI.hero,13)
 local heroEdge=stroke(UI.hero,Color3.new(1,1,1),.52)
@@ -799,6 +883,121 @@ function LoadToast:update(now,time)
 end
 UI.loadToast=LoadToast.new()
 
+-- Compact, reusable feature control. Its hit target never scales; only the
+-- inner face compresses. OFF has no colored glow, flash or running light sweep.
+local FeatureToggle={};FeatureToggle.__index=FeatureToggle
+function FeatureToggle.new(parent,name,title,controller)
+    local b=make("TextButton",parent,{Name=name,Text="",Position=UDim2.fromOffset(5,6),
+        Size=UDim2.fromOffset(340,60),BackgroundTransparency=1,AutoButtonColor=false,Active=true,Selectable=true})
+    local face=frame(b,"ToggleFace",UDim2.fromScale(.5,.5),UDim2.fromScale(1,1),Color3.new(1,1,1))
+    face.AnchorPoint=Vector2.new(.5,.5);corner(face,13)
+    gradient(face,{Color3.fromRGB(25,26,32),C.black,Color3.fromRGB(21,21,27)},26)
+    local scale=make("UIScale",face,{Name="TogglePressScale",Scale=1})
+    local glow=frame(b,"ToggleGlow",UDim2.fromOffset(-2,-2),UDim2.new(1,4,1,4),nil,1)
+    glow.Active=false;glow.ZIndex=0;corner(glow,15)
+    local glowEdge=stroke(glow,Color3.new(1,1,1),1,3)
+    local glowLight=gradient(glowEdge,{C.deep,C.violet,C.cyan,C.chrome,C.deep},24)
+    fadeGradient(glowLight)
+    local activeFace=frame(face,"ToggleActiveSurface",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),1)
+    activeFace.Active=false;corner(activeFace,13)
+    gradient(activeFace,{Color3.fromRGB(19,30,42),C.black,Color3.fromRGB(25,17,34)},26)
+    local edge=stroke(face,C.steel,.64,1)
+    local edgeLight=gradient(edge,{C.deep,C.violet,C.cyan,C.chrome,C.rose},18)
+    edgeLight.Enabled=false
+    local neon=NeonFlow.new(face,"ToggleNeon",12,3.4,edgeLight)
+    local caption=label(face,"ToggleCaption",title,UDim2.fromOffset(16,0),UDim2.new(1,-104,1,0),20,C.muted,OPTION_FONT)
+    caption.Active=false;caption.ZIndex=4;caption.TextTruncate=Enum.TextTruncate.None
+    local pill=frame(face,"TogglePill",UDim2.new(1,-14,.5,0),UDim2.fromOffset(62,28),C.black)
+    pill.AnchorPoint=Vector2.new(1,.5);pill.Active=false;pill.ZIndex=4;corner(pill,9)
+    local pillEdge=stroke(pill,C.steel,.65,1)
+    local dot=frame(pill,"ToggleDot",UDim2.fromOffset(10,12),UDim2.fromOffset(4,4),C.steel)
+    dot.Active=false;corner(dot,4)
+    local status=label(pill,"ToggleStatus","OFF",UDim2.fromOffset(20,0),UDim2.new(1,-24,1,0),17,C.muted,OPTION_FONT)
+    status.Active=false;status.TextXAlignment=Enum.TextXAlignment.Center
+    local flash=frame(face,"ToggleFlash",UDim2.fromOffset(1,1),UDim2.new(1,-2,1,-2),Color3.new(1,1,1),1)
+    flash.Active=false;flash.ZIndex=3;corner(flash,12)
+    local flashLight=gradient(flash,{C.violet,C.cyan,C.chrome,C.cyan},24);fadeGradient(flashLight)
+    local lip=frame(face,"ToggleEdgeLight",UDim2.fromOffset(12,0),UDim2.new(1,-24,0,1),Color3.new(1,1,1),1)
+    lip.Active=false;lip.ZIndex=3
+    local lipLight=gradient(lip,{C.violet,C.cyan,C.chrome},0);fadeGradient(lipLight)
+    local self=setmetatable({button=b,face=face,controller=controller,scale=scale,activeFace=activeFace,
+        caption=caption,pill=pill,pillEdge=pillEdge,dot=dot,status=status,edge=edge,edgeLight=edgeLight,
+        glowEdge=glowEdge,glowLight=glowLight,neon=neon,flash=flash,flashLight=flashLight,lip=lip,lipLight=lipLight,
+        blend=make("NumberValue",b,{Name="ToggleBlend",Value=0}),
+        flashAmount=make("NumberValue",b,{Name="ToggleFlashAmount",Value=0})},FeatureToggle)
+    connect(self.blend.Changed,function() self:paint() end)
+    connect(self.flashAmount.Changed,function() self:paint() end)
+    connect(b.InputBegan,function(input)
+        if self.pointer or state.target=="closed" then return end
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            self.pointer=input;tween(scale,.09,{Scale=.978})
+        end
+    end)
+    connect(Input.InputEnded,function(input)
+        if self.pointer and (input==self.pointer or (self.pointer.UserInputType==Enum.UserInputType.MouseButton1
+            and input.UserInputType==Enum.UserInputType.MouseButton1)) then
+            self.pointer=nil;tween(scale,.22,{Scale=1})
+        end
+    end)
+    connect(Input.WindowFocusReleased,function() self.pointer=nil;tween(scale,.18,{Scale=1}) end)
+    connect(b.Activated,function()
+        if state.target=="closed" then return end
+        self:setEnabled(not controller.enabled)
+        scale.Scale=.978;tween(scale,.24,{Scale=1})
+    end)
+    b:SetAttribute("Enabled",false);self:paint()
+    return self
+end
+function FeatureToggle:paint()
+    local blend=self.blend.Value
+    self.caption.TextColor3=C.muted:Lerp(C.white,blend)
+    self.status.TextColor3=C.muted:Lerp(C.cyan,blend)
+    self.dot.BackgroundColor3=C.steel:Lerp(C.cyan,blend)
+    self.pill.BackgroundColor3=C.black:Lerp(Color3.fromRGB(18,34,46),blend)
+    self.pillEdge.Color=C.steel:Lerp(C.cyan,blend)
+    self.edge.Color=C.steel:Lerp(Color3.new(1,1,1),blend)
+    self.edgeLight.Enabled=blend>.001
+    alpha(self.edge,"Transparency",.64-blend*.32)
+    alpha(self.pillEdge,"Transparency",.65-blend*.25)
+    alpha(self.activeFace,"BackgroundTransparency",1-blend)
+    alpha(self.neon.fill,"BackgroundTransparency",1-blend*.20)
+    alpha(self.glowEdge,"Transparency",1-blend*.30)
+    alpha(self.lip,"BackgroundTransparency",1-blend*.57)
+    alpha(self.flash,"BackgroundTransparency",1-self.flashAmount.Value*.36)
+end
+function FeatureToggle:setEnabled(enabled)
+    local actual=self.controller:setEnabled(enabled)
+    self.button:SetAttribute("Enabled",actual)
+    UI.gui:SetAttribute("NoFallDamageEnabled",actual)
+    self.status.Text=actual and "ON" or "OFF"
+    tween(self.blend,.26,{Value=actual and 1 or 0})
+    if tweens[self.flashAmount] then tweens[self.flashAmount]:Cancel();tweens[self.flashAmount]=nil end
+    self.flashAmount.Value=actual and 1 or 0
+    if actual then tween(self.flashAmount,.65,{Value=0}) end
+end
+function FeatureToggle:resize(width)
+    local w=math.min(340,math.max(96,width-16))
+    local compact=w<248
+    self.button.Size=UDim2.fromOffset(w,compact and 88 or 60)
+    self.caption.Position=UDim2.fromOffset(compact and 12 or 16,compact and 3 or 0)
+    self.caption.Size=compact and UDim2.new(1,-24,0,42) or UDim2.new(1,-104,1,0)
+    self.caption.TextSize=compact and 18 or 20;self.caption.TextWrapped=compact
+    self.pill.AnchorPoint=Vector2.new(1,compact and 1 or .5)
+    self.pill.Position=compact and UDim2.new(1,-12,1,-10) or UDim2.new(1,-14,.5,0)
+end
+function FeatureToggle:update(time)
+    if self.blend.Value<=.001 then return end
+    self.neon:update(time,self.blend.Value*.20)
+    self.glowLight.Offset=self.neon.wash.Offset
+    self.glowLight.Rotation=self.neon.wash.Rotation
+    self.lipLight.Offset=Vector2.new(math.sin(time*.65)*.30,0)
+    self.flashLight.Offset=Vector2.new((1-self.flashAmount.Value)*1.5-.75,0)
+end
+features.noFallDamage=NoFallDamage.new()
+UI.noFallToggle=FeatureToggle.new(pages.Main,"NoFallDamage","No Fall Damage",features.noFallDamage)
+UI.gui:SetAttribute("NoFallDamageEnabled",false)
+UI.gui:SetAttribute("NoFallDamageSupported",features.noFallDamage.supported)
+
 -- Put the existing labels/icons inside the press surface, while the original
 -- TextButton's touch/click rectangle remains stationary and full-sized.
 for _,record in ipairs(buttons) do
@@ -896,6 +1095,8 @@ local function resize(initial)
     UI.content.Position=UDim2.fromOffset(12,headerH+12)
     UI.content.Size=UDim2.new(1,-24,1,-headerH-48)
     local cw=pw-24
+    UI.noFallToggle:resize(cw)
+    pages.Main.CanvasSize=UDim2.fromOffset(0,UI.noFallToggle.button.Size.Y.Offset+18)
     local narrow=cw<360
     local heroHeight=narrow and 246 or math.min(262,math.max(156,h-8-headerH-54))
     UI.hero.Size=UDim2.new(1,-8,0,heroHeight)
@@ -1197,5 +1398,6 @@ connect(RunService.Heartbeat,function(dt)
         UI.emblemNeon:update(p,state.burst)
         alpha(UI.statusDot,"BackgroundTransparency",.08+.12*pulse)
     end
+    if state.page=="Main" and state.paneOpen then UI.noFallToggle:update(p) end
 end)
 return UI.gui

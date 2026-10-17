@@ -10,7 +10,9 @@ source = (ROOT / "Reyzn X.lua").read_text()
 compiler = LUAU.with_name("luau-compile")
 if compiler.is_file():
     subprocess.run([str(compiler), str(ROOT / "Reyzn X.lua")], check=True, stdout=subprocess.DEVNULL)
-for forbidden in ("loadstring", "TeleportService", "Humanoid", "VideoFrame", 'make("Sound"', "CharacterAdded", "CharacterRemoving"):
+# Main now contains the explicitly requested local velocity controller. Keep the
+# ban on downloaded code, unrelated services and the original clipboard side effect.
+for forbidden in ("loadstring", "TeleportService", "VideoFrame", 'make("Sound"', "setclipboard"):
     assert forbidden not in source, forbidden
 assert source.count('game:HttpGet(') == 1, 'Only the fixed artwork downloader may use HTTP'
 assert source.count('https://') == 12, 'Only the eleven supplied images and shared fire sprite are allowed'

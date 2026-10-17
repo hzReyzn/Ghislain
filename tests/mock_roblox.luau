@@ -45,6 +45,7 @@ local function newWorld()
     function vec.__mul(a,b)if type(a)=="number" then a,b=b,a end;return vec.new(a.X*b,a.Y*b,a.Z*b)end
     function vec.__div(a,b)return a*(1/b)end
     function vec.__unm(a)return a*-1 end
+    function vec.__eq(a,b)return a.X==b.X and a.Y==b.Y and a.Z==b.Z end
     function vec:Dot(b)return self.X*b.X+self.Y*b.Y+self.Z*b.Z end
     function vec:Lerp(b,t)return self+(b-self)*t end
     vec.__index=function(t,k)
