@@ -1,6 +1,7 @@
 -- Small deterministic client harness. It checks controller behavior, not Roblox physics/rendering.
 local function newWorld()
-    local W={time=0,tasks={},tweens={},warnings={},objects={},requests={},viewport={X=1280,Y=720},rejectVideoCanvas=true}
+    local W={time=0,tasks={},tweens={},warnings={},objects={},requests={},viewport={X=1280,Y=720},rejectVideoCanvas=true,
+        keys={},imports={},loadedTracks={},velocityWrites=0}
     local env=setmetatable({}, {__index=getfenv()})
     local function signal()
         local s={links={}}
@@ -87,7 +88,7 @@ local function newWorld()
     env.Random={new=function()return {NextNumber=function(_,a,b)return (a+b)/2 end,NextInteger=function(_,a,b)return math.floor((a+b)/2)end}end}
     env.OverlapParams={new=function()return {}end};env.RaycastParams={new=function()return {}end}
     local methods={}
-    local events={Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,JumpRequest=true}
+    local events={Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,WindowFocused=true,JumpRequest=true}
     local guiClasses={Frame=true,CanvasGroup=true,TextLabel=true,TextButton=true,TextBox=true,ImageLabel=true,ImageButton=true,ScrollingFrame=true,VideoFrame=true}
     local mt={}
     mt.__index=function(t,k)
@@ -119,6 +120,7 @@ local function newWorld()
     end
     mt.__newindex=function(t,k,v)
         local old=t._props[k]
+        if k=='AssemblyLinearVelocity' then W.velocityWrites+=1 end
         if k=="Parent" and old~=v then
             if old then
                 local index=table.find(old._children,t);if index then table.remove(old._children,index)end
@@ -168,13 +170,22 @@ local function newWorld()
     function methods:ChangeState(s)local old=self.State;self.State=s;self.StateChanged:Fire(old,s)end
     function methods:GetState()return self.State end
     function methods:GetConnectedParts()return {}end
+    function methods:IsFocused()return W.textFocused==self end
+    function methods:ReleaseFocus()
+        if W.textFocused==self then W.textFocused=nil;self.FocusLost:Fire(false)end
+    end
     function methods:Play()self.IsPlaying=true;self.Playing=true end
     function methods:Pause()self.IsPlaying=false;self.Playing=false end
     function methods:Resume()self.IsPlaying=true;self.Playing=true end
     function methods:Stop()self.IsPlaying=false;self.Playing=false;self.TimePosition=0 end
     function methods:Emit()end
     function methods:Clear()end
-    function methods:LoadAnimation()local track=env.Instance.new('AnimationTrack');track.Length=1;return track end
+    function methods:LoadAnimation(animation)
+        if W.loadDelay then env.task.wait(W.loadDelay) end
+        local track=env.Instance.new('AnimationTrack');track.Length=1
+        track.AnimationId=animation.AnimationId;track.Animator=self
+        W.loadedTracks[#W.loadedTracks+1]=track;return track
+    end
     function methods:Fire(...)if self.Event then self.Event:Fire(...)end end
     env.Instance={new=function(c)
         local t=setmetatable({_props={ClassName=c,Name=c,Visible=true,Enabled=true,BackgroundTransparency=0,TextTransparency=0,ImageTransparency=0,Transparency=0,ScrollBarImageTransparency=0,
@@ -198,7 +209,8 @@ local function newWorld()
         return t
     end,GetValue=function(_,x)return x end}
     services.UserInputService=env.Instance.new('UserInputService');services.UserInputService.TouchEnabled=true
-    services.UserInputService.GetFocusedTextBox=function()return nil end
+    services.UserInputService.GetFocusedTextBox=function()return W.textFocused end
+    services.UserInputService.IsKeyDown=function(_,key)return W.keys[key.Name]==true end
     services.UserInputService.GetMouseLocation=function()return vec.new(500,300)end
     services.ContentProvider={PreloadAsync=function(_,items)
         if W.preloadDelay then env.task.wait(W.preloadDelay) end
@@ -224,7 +236,16 @@ local function newWorld()
             if W.httpFailure then error('network unavailable') end
             local body=W.http[url] or W.http[url:match('^[^?]+')]
             assert(body,url);return body
-        end,GetObjects=function()return {}end}
+        end,GetObjects=function(_,url)
+            if W.importDelay then env.task.wait(W.importDelay) end
+            local folder=env.Instance.new('Folder');folder.Name='CatalogPackage'
+            local clip=env.Instance.new('Animation');clip.AnimationId='rbxassetid://'..url:match('(%d+)$')..'7';clip.Parent=folder
+            W.imports[#W.imports+1]=folder;return {folder}
+        end}
+    env.require=function(module)
+        assert(module.Name=='PlayerModule')
+        return {GetControls=function()return {GetMoveVector=function()return W.move or vec.new()end}end}
+    end
     env.loadstring=function(src)local fn,err=loadstring(src);if fn then setfenv(fn,env)end;return fn,err end
     W.files={};W.writes={}
     env.isfile=function(path)return W.files[path]~=nil end

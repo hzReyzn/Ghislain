@@ -6,19 +6,31 @@ Made By Reyzn.
 
 ```lua
 local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-local source = game:HttpGet(url .. "?build=no-fall-toggle-20261017&t=" .. tostring(os.time()))
+local source = game:HttpGet(url .. "?build=fly-ss3-fe-20261017&t=" .. tostring(os.time()))
 loadstring(source)()
 ```
 
-## Main: No Fall Damage
+## Main: interruptores y ejecutables
 
-Main contiene una única tarjeta compacta, con los textos **No Fall Damage** y **OFF / ON**, sin descripción. Cada ejecución empieza en **OFF**. El diseño apagado es carbón y gris; al activar aparecen el neón celeste/amatista, un destello breve y una compresión suave del botón. Al apagar, el destello se cancela y el brillo se desvanece. La tarjeta mide hasta 340 × 60 px; en pantallas estrechas acomoda el estado debajo del título, sin agrandar el Hub.
+Main separa los controles en dos columnas: **No Fall Damage** con **OFF / ON** a la izquierda y el ejecutable **FLY SS3 FE** a la derecha. Entre ambos quedan un espacio libre y una línea con 88% de transparencia y extremos desvanecidos. No se agregan descripciones ni encabezados. Los controles mantienen el acabado metálico, Rajdhani y el neón del Hub; en pantallas estrechas el contenido permite desplazamiento horizontal para conservar botones legibles y táctiles.
+
+**No Fall Damage** empieza en OFF. El diseño apagado es carbón y gris; al activar aparecen el neón celeste/amatista, un destello breve y una compresión suave. Al apagar, el destello se cancela y el brillo se desvanece. La tarjeta mide hasta 340 × 60 px; en columnas estrechas acomoda el estado debajo del título, sin agrandar el Hub.
 
 Se integra el mecanismo del código suministrado: guardar la velocidad de `HumanoidRootPart`, ponerla a cero en `Heartbeat` y restaurarla en `RenderStepped`. Su comprobación de juego se conserva: **Natural Disaster Survival, PlaceId 189707**. En otros lugares permanece OFF y se informa por consola, sin cerrar el GUI ni añadir textos al panel. Se omite la escritura al portapapeles del ejemplo porque no forma parte del efecto.
 
 El controlador conserva ON al morir, reaparecer, cambiar de sección, plegar, minimizar o arrastrar el GUI fuera de pantalla. Mientras falta el personaje o su raíz, sigue habilitado y espera sus eventos; no crea esperas bloqueantes. También admite una raíz reemplazada dentro del mismo personaje. Solo OFF manual o la destrucción completa del GUI desconectan el efecto. Reejecutar destruye primero la instancia anterior y empieza de nuevo en OFF.
 
 La adaptación evita acumular `RenderStepped:Wait()` dentro de Heartbeat. Mantiene una sola restauración pendiente, la libera antes de física si no hubo renderizado y descarta callbacks de activaciones anteriores. OFF y cierre restauran el valor pendiente si todavía corresponde a la escritura del controlador; una velocidad nueva distinta de cero aplicada por otro script se respeta. No modifica salud, colisiones, gravedad ni estados del Humanoid. Esto reduce conflictos, pero no garantiza compatibilidad con cualquier controlador externo ni la cancelación del daño calculado por el servidor: esas dos cosas requieren probarse en el juego real.
+
+### FLY SS3 FE
+
+Un clic abre el GUI independiente **FLY DBZ**, inicialmente OFF y con velocidad 5. Los clics repetidos conservan la misma ventana y sus ajustes. Su interruptor externo activa/desactiva el vuelo y la animación; permite editar la velocidad mientras se vuela, con pasos de 5 y límite 5000. Mantiene WASD/joystick, arrastre, animación SSJ3 compatible y ausencia de VFX/aviso. Morir, reiniciar o reemplazar la raíz lo deja OFF hasta pulsar ON de nuevo.
+
+La protección principal de Reyzn X tiene prioridad mientras está ON: la de FLY se suspende sin detener el vuelo. Al apagar la principal, FLY retoma su protección solo si sigue activo. Un registro local compartido permite un único escritor de velocidad, termina cualquier pulso pendiente antes de transferir el control y evita restauraciones obsoletas. La prioridad funciona aunque FLY se haya ejecutado por separado antes de abrir el Hub. Ambos conservan el filtro de PlaceId 189707.
+
+FLY conserva su ventana y ciclo de vida independientes: cerrar Reyzn X libera la prioridad y permite que el vuelo activo continúe; cerrar FLY elimina sus propios recursos y no apaga la opción principal. Reejecutar el Hub empieza su interruptor principal en OFF sin duplicar ni reiniciar un FLY que ya esté abierto.
+
+La copia de [`features/FLY-SSJ3.lua`](features/FLY-SSJ3.lua) está incluida como función en el archivo distribuido: el clic no depende de descargar ni compilar código remoto. Para actualizarla desde el repositorio FLY-SSJ3, ejecuta `python tools/sync_fly.py ../fly-ssj3/FLY-SSJ3.lua`; sin argumento vuelve a incluir la copia guardada. Las pruebas exigen igualdad exacta entre la copia, la función incluida y los coordinadores.
 
 ## Fuego compartido, neón celeste y aviso de carga
 
@@ -63,7 +75,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage y FLY SS3 FE; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -91,4 +103,6 @@ El comando compila el Luau, comprueba el formato y tamaño de los doce recursos 
 
 Las nueve pruebas nuevas cubren OFF inicial y dimensiones, pulsos/restauración de velocidad, muerte y respawn tardío, raíz reemplazada, efecto independiente de la visibilidad, restauración al apagar y coexistencia con otra escritura, cambios ON/OFF repetidos, callbacks obsoletos, cierre/destrucción/reejecución, bloqueo fuera de PlaceId 189707 y respuesta visual/táctil del control.
 
-Las pruebas simulan el cliente. La revisión visual aproximada ayuda a comprobar la distribución, pero ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.
+También ejecuta **15 escenarios de integración** con el código completo de ambos controladores: distribución en seis tamaños, lanzamiento único, velocidad en vivo, prioridad en ambos órdenes de ejecución, restauraciones pendientes y callbacks retrasados, muerte, raíz reemplazada, reejecución, cierre independiente y limpieza del registro compartido. El controlador FLY conserva sus 26 pruebas en su repositorio.
+
+Las pruebas simulan el cliente. Ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.
