@@ -1,7 +1,7 @@
 -- Small deterministic client harness. It checks controller behavior, not Roblox physics/rendering.
 local function newWorld()
     local W={time=0,tasks={},tweens={},warnings={},objects={},requests={},viewport={X=1280,Y=720},rejectVideoCanvas=true,
-        keys={},imports={},loadedTracks={},velocityWrites=0}
+        keys={},imports={},loadedTracks={},velocityWrites=0,descendantScans=0,nearby={}}
     local env=setmetatable({}, {__index=getfenv()})
     local function signal()
         local s={links={}}
@@ -77,7 +77,7 @@ local function newWorld()
     env.UDim2={new=function(x,xo,y,yo)return {X={Scale=x,Offset=xo},Y={Scale=y,Offset=yo}}end}
     env.UDim2.fromScale=function(x,y)return env.UDim2.new(x,0,y,0)end
     env.UDim2.fromOffset=function(x,y)return env.UDim2.new(0,x,0,y)end
-    for _,key in ipairs({"ColorSequence","ColorSequenceKeypoint","NumberSequence","NumberSequenceKeypoint","NumberRange","TweenInfo"}) do
+    for _,key in ipairs({"ColorSequence","ColorSequenceKeypoint","NumberSequence","NumberSequenceKeypoint","NumberRange","TweenInfo","PhysicalProperties"}) do
         env[key]={new=function(...)return {...}end}
     end
     env.Font={new=function(family,weight,style) return {Family=family,Weight=weight,Style=style} end}
@@ -88,7 +88,7 @@ local function newWorld()
     env.Random={new=function()return {NextNumber=function(_,a,b)return (a+b)/2 end,NextInteger=function(_,a,b)return math.floor((a+b)/2)end}end}
     env.OverlapParams={new=function()return {}end};env.RaycastParams={new=function()return {}end}
     local methods={}
-    local events={Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,WindowFocused=true,JumpRequest=true}
+    local events={Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,DescendantAdded=true,DescendantRemoving=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,WindowFocused=true,JumpRequest=true}
     local guiClasses={Frame=true,CanvasGroup=true,TextLabel=true,TextButton=true,TextBox=true,ImageLabel=true,ImageButton=true,ScrollingFrame=true,VideoFrame=true}
     local mt={}
     mt.__index=function(t,k)
@@ -114,14 +114,27 @@ local function newWorld()
             return pp+vec.new(ps.X*pos.X.Scale+pos.X.Offset*scale-anchor.X*size.X,ps.Y*pos.Y.Scale+pos.Y.Offset*scale-anchor.Y*size.Y)
         end
         if k=="AbsoluteContentSize" then return vec.new(510,600)end
-        if k=="AssemblyRootPart" then return t end
+        if k=="AssemblyRootPart" then return t._props.AssemblyRootPart or t end
+        if (k=="AssemblyLinearVelocity" or k=="AssemblyAngularVelocity") and t._props.AssemblyRootPart and t._props.AssemblyRootPart~=t then
+            return t._props.AssemblyRootPart[k]
+        end
         if k=="Position" and t:IsA("BasePart") then return t._props.CFrame.Position end
         return t._props[k]
     end
     mt.__newindex=function(t,k,v)
         local old=t._props[k]
         if k=='AssemblyLinearVelocity' then W.velocityWrites+=1 end
+        if (k=='AssemblyLinearVelocity' or k=='AssemblyAngularVelocity') and t._props.AssemblyRootPart and t._props.AssemblyRootPart~=t then
+            t._props.AssemblyRootPart._props[k]=v
+        end
         if k=="Parent" and old~=v then
+            local descendants={t}
+            for _,child in ipairs(t:GetDescendants()) do descendants[#descendants+1]=child end
+            local ancestor=old
+            while ancestor do
+                for _,child in ipairs(descendants) do ancestor.DescendantRemoving:Fire(child) end
+                ancestor=ancestor.Parent
+            end
             if old then
                 local index=table.find(old._children,t);if index then table.remove(old._children,index)end
             end
@@ -129,6 +142,11 @@ local function newWorld()
             if v then v._children[#v._children+1]=t end
             if old then old.ChildRemoved:Fire(t)end
             if v then v.ChildAdded:Fire(t)end
+            ancestor=v
+            while ancestor do
+                for _,child in ipairs(descendants) do ancestor.DescendantAdded:Fire(child) end
+                ancestor=ancestor.Parent
+            end
         else t._props[k]=v end
         if k=='Video' and t.ClassName=='VideoFrame' then
             t._props.IsLoaded=not (W.rejectWebm and v:find('webm'))
@@ -141,9 +159,15 @@ local function newWorld()
             if t._signals.Changed then t._signals.Changed:Fire(v)end
         end
     end
-    function methods:IsA(c)return c==self.ClassName or c=="Instance" or (c=="GuiObject" and guiClasses[self.ClassName]) or (c=="BasePart" and (self.ClassName=="Part" or self.ClassName=="Seat"))end
+    function methods:IsA(c)
+        return c==self.ClassName or c=="Instance" or (c=="GuiObject" and guiClasses[self.ClassName])
+            or (c=="BasePart" and (self.ClassName=="Part" or self.ClassName=="Seat" or self.ClassName=="VehicleSeat" or self.ClassName=="MeshPart"))
+            or (c=="DataModelMesh" and (self.ClassName=="BlockMesh" or self.ClassName=="SpecialMesh"))
+            or (c=="Constraint" and (self.ClassName=="HingeConstraint" or self.ClassName=="BallSocketConstraint" or self.ClassName=="AlignOrientation" or self.ClassName=="LinearVelocity"))
+    end
     function methods:GetChildren()return table.clone(self._children)end
     function methods:GetDescendants()
+        if self.ClassName=='Workspace' then W.descendantScans+=1 end
         local found={}
         for _,c in ipairs(self._children) do found[#found+1]=c;for _,d in ipairs(c:GetDescendants())do found[#found+1]=d end end
         return found
@@ -169,7 +193,7 @@ local function newWorld()
     end
     function methods:ChangeState(s)local old=self.State;self.State=s;self.StateChanged:Fire(old,s)end
     function methods:GetState()return self.State end
-    function methods:GetConnectedParts()return {}end
+    function methods:GetConnectedParts()return table.clone(self._connected or {})end
     function methods:IsFocused()return W.textFocused==self end
     function methods:ReleaseFocus()
         if W.textFocused==self then W.textFocused=nil;self.FocusLost:Fire(false)end
@@ -217,13 +241,25 @@ local function newWorld()
         if W.assetRenderFailure then error('asset rendering unavailable') end
         for _,item in ipairs(items) do item.IsLoaded=true end
     end};services.SoundService=env.Instance.new('SoundService')
-    env.workspace=env.Instance.new('Workspace');env.workspace.Name='Workspace';env.workspace.Gravity=196.2
+    env.workspace=env.Instance.new('Workspace');env.workspace.Name='Workspace';env.workspace.Gravity=196.2;env.workspace.FallenPartsDestroyHeight=-500
     env.workspace.CurrentCamera=env.Instance.new('Camera');env.workspace.CurrentCamera.ViewportSize=vec.new(1280,720)
-    env.workspace.GetPartBoundsInRadius=function()return {}end;env.workspace.GetPartBoundsInBox=function()return {}end;env.workspace.Raycast=function()return nil end
+    env.workspace.GetPartBoundsInRadius=function(_,_,_,params)
+        local result={}
+        for _,part in ipairs(W.nearby) do
+            result[#result+1]=part
+            if params.MaxParts and params.MaxParts>0 and #result>=params.MaxParts then break end
+        end
+        return result
+    end
+    env.workspace.GetPartBoundsInBox=function()return {}end
+    env.workspace.Raycast=function(_,origin,direction,params)
+        if W.raycast then return W.raycast(origin,direction,params) end
+    end
     local player=env.Instance.new('Player');player.Name='TestPlayer';player.DisplayName='Test';player.UserId=123
     local pg=env.Instance.new('PlayerGui');pg.Parent=player
     local scripts=env.Instance.new('PlayerScripts');scripts.Parent=player
-    services.Players={LocalPlayer=player,GetPlayers=function()return {player}end,GetUserThumbnailAsync=function(_,id,kind,size)
+    W.players={player}
+    services.Players={LocalPlayer=player,GetPlayers=function()return W.players end,GetUserThumbnailAsync=function(_,id,kind,size)
         W.thumbnailRequest={id=id,kind=kind,size=size}
         if W.thumbnailFailure then error('thumbnail unavailable')end
         if W.thumbnailDelay then env.task.wait(W.thumbnailDelay)end

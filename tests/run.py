@@ -11,6 +11,9 @@ fly = (ROOT / "features/FLY-SSJ3.lua").read_text()
 assert "local function runFlySSJ3()\n" + fly + "end\n" in source, "Rebuild bundled FLY with tools/sync_fly.py"
 coordinator = fly.split("-- BEGIN NO FALL COORDINATOR\n", 1)[1].split("-- END NO FALL COORDINATOR\n", 1)[0]
 assert source.split("-- BEGIN NO FALL COORDINATOR\n", 1)[1].split("-- END NO FALL COORDINATOR\n", 1)[0] == coordinator
+for path,name in [('runtime/CharacterFeature.luau','createCharacterFeature'),
+                  ('features/WalkOnWater.luau','createWalkOnWater'),('features/Antifling.luau','createAntifling')]:
+    assert 'local '+name+' = (function()\n'+(ROOT/path).read_text()+'end)()' in source, 'Rebuild character features'
 compiler = LUAU.with_name("luau-compile")
 if compiler.is_file():
     subprocess.run([str(compiler), str(ROOT / "Reyzn X.lua")], check=True, stdout=subprocess.DEVNULL)
@@ -34,7 +37,7 @@ for name, size, properties in assets:
         assert body[:8] == b'\x89PNG\r\n\x1a\n' and body[12:16] == b'IHDR' and body[-8:-4] == b'IEND', name
 generated = ROOT / "tests" / "_generated.luau"
 try:
-    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\n")
+    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\nrequire('./character_features')(source,fly)\n")
     subprocess.run([str(LUAU), str(generated)], check=True)
 finally:
     generated.unlink(missing_ok=True)

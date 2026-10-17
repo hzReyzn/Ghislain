@@ -6,13 +6,13 @@ Made By Reyzn.
 
 ```lua
 local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-local source = game:HttpGet(url .. "?build=fly-ss3-fe-20261017&t=" .. tostring(os.time()))
+local source = game:HttpGet(url .. "?build=water-antifling-20261017&t=" .. tostring(os.time()))
 loadstring(source)()
 ```
 
 ## Main: interruptores y ejecutables
 
-Main separa los controles en dos columnas: **No Fall Damage** con **OFF / ON** a la izquierda y el ejecutable **FLY SS3 FE** a la derecha. Entre ambos quedan un espacio libre y una línea con 88% de transparencia y extremos desvanecidos. No se agregan descripciones ni encabezados. Los controles mantienen el acabado metálico, Rajdhani y el neón del Hub; en pantallas estrechas el contenido permite desplazamiento horizontal para conservar botones legibles y táctiles.
+Main separa los controles en dos columnas: **No Fall Damage**, **Walk on Water** y **Antifling**, con **OFF / ON**, a la izquierda; el ejecutable **FLY SS3 FE** a la derecha. Entre ambos quedan un espacio libre y una línea con 88% de transparencia y extremos desvanecidos. No se agregan descripciones ni encabezados. Los controles mantienen el acabado metálico, Rajdhani y el neón del Hub; en pantallas estrechas el contenido permite desplazamiento horizontal para conservar botones legibles y táctiles, y vertical para alcanzar todas las filas.
 
 **No Fall Damage** empieza en OFF. El diseño apagado es carbón y gris; al activar aparecen el neón celeste/amatista, un destello breve y una compresión suave. Al apagar, el destello se cancela y el brillo se desvanece. La tarjeta mide hasta 340 × 60 px; en columnas estrechas acomoda el estado debajo del título, sin agrandar el Hub.
 
@@ -20,7 +20,19 @@ Se integra el mecanismo del código suministrado: guardar la velocidad de `Human
 
 El controlador conserva ON al morir, reaparecer, cambiar de sección, plegar, minimizar o arrastrar el GUI fuera de pantalla. Mientras falta el personaje o su raíz, sigue habilitado y espera sus eventos; no crea esperas bloqueantes. También admite una raíz reemplazada dentro del mismo personaje. Solo OFF manual o la destrucción completa del GUI desconectan el efecto. Reejecutar destruye primero la instancia anterior y empieza de nuevo en OFF.
 
-La adaptación evita acumular `RenderStepped:Wait()` dentro de Heartbeat. Mantiene una sola restauración pendiente, la libera antes de física si no hubo renderizado y descarta callbacks de activaciones anteriores. OFF y cierre restauran el valor pendiente si todavía corresponde a la escritura del controlador; una velocidad nueva distinta de cero aplicada por otro script se respeta. No modifica salud, colisiones, gravedad ni estados del Humanoid. Esto reduce conflictos, pero no garantiza compatibilidad con cualquier controlador externo ni la cancelación del daño calculado por el servidor: esas dos cosas requieren probarse en el juego real.
+La adaptación evita acumular `RenderStepped:Wait()` dentro de Heartbeat. Mantiene una sola restauración pendiente, la libera antes de física si no hubo renderizado y descarta callbacks de activaciones anteriores. OFF y cierre restauran el valor pendiente si todavía corresponde a la escritura del controlador; una velocidad nueva distinta de cero aplicada por otro script se respeta. Los controladores integrados de agua y Antifling invalidan expresamente un pulso cuando corrigen su velocidad, incluso si la corrección es cero. No modifica salud, colisiones, gravedad ni estados del Humanoid. Esto reduce conflictos, pero no garantiza compatibilidad con cualquier controlador externo ni la cancelación del daño calculado por el servidor: esas dos cosas requieren probarse en el juego real.
+
+### Walk on Water y Antifling
+
+Ambos parten de los controladores de HzReyzn Hub. Comienzan **OFF**, conservan la intención **ON** al morir o reiniciar y vuelven a enlazarse con el personaje nuevo. Mientras faltan el Humanoid o la raíz, el personaje está muerto, fuera de Workspace o bajo el límite del vacío, liberan sus recursos físicos y esperan. OFF manual y cierre del Hub desconectan únicamente el controlador correspondiente. No hay activaciones heredadas después de reejecutar el Hub.
+
+- **Walk on Water:** sigue la altura real de WaterLevel, superficies de agua y FloodLevel, incluyendo sus cambios entre rondas. Conserva el soporte bajo los pies, vehículos conectados y el área de 400 studs del código anterior. Solo transporta al personaje con el agua si ya estaba apoyado; no lo teletransporta desde el fondo ni durante un salto. Mantiene hasta seis soportes de vehículos abandonados, limita el muestreo del área y evita mover conjuntos que adquieran otro ocupante. La búsqueda del mundo se realiza una vez al activar; después usa eventos y consultas acotadas.
+- **Antifling:** aísla las colisiones con jugadores cercanos mediante restricciones propias; no modifica CanCollide, grupos de colisión ni estados del Humanoid. Crea hasta 64 restricciones por paso y un máximo de 2048, priorizando vecinos cercanos. Frena impulsos y giros extremos; solo recupera una posición reciente si sigue cerca y existe suelo bajo ella. Descarta esa posición al cambiar de cuerpo, sentarse, volar o ser transportado por el agua.
+- **Compatibilidad:** durante el vuelo, Walk on Water retira temporalmente sus plataformas sin cambiar su interruptor. Antifling mantiene las restricciones entre personajes, pero deja pasar la velocidad intencional de FLY, incluido su máximo de 5000. Al apagar el vuelo, el soporte de agua vuelve con el cuerpo válido. No Fall Damage principal mantiene siempre su prioridad sobre el de FLY.
+
+Cada función tiene estado, generación de personaje, conexiones y objetos propios. El coordinador de velocidad permite leer la velocidad real entre el pulso y su restauración; una corrección de Antifling o del soporte de un vehículo no puede ser deshecha por una restauración anterior de No Fall Damage. La coordinación reconoce también una raíz soldada a la misma estructura rígida de un vehículo. Destruir un controlador no elimina los recursos de otro.
+
+Los módulos están en `runtime/CharacterFeature.luau`, `features/WalkOnWater.luau` y `features/Antifling.luau`. Después de modificarlos, ejecuta `python tools/build_features.py` para incluirlos en el archivo distribuido. No se descarga código remoto para activar las opciones.
 
 ### FLY SS3 FE
 
@@ -75,7 +87,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage y FLY SS3 FE; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling y FLY SS3 FE; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -103,6 +115,8 @@ El comando compila el Luau, comprueba el formato y tamaño de los doce recursos 
 
 Las nueve pruebas nuevas cubren OFF inicial y dimensiones, pulsos/restauración de velocidad, muerte y respawn tardío, raíz reemplazada, efecto independiente de la visibilidad, restauración al apagar y coexistencia con otra escritura, cambios ON/OFF repetidos, callbacks obsoletos, cierre/destrucción/reejecución, bloqueo fuera de PlaceId 189707 y respuesta visual/táctil del control.
 
-También ejecuta **15 escenarios de integración** con el código completo de ambos controladores: distribución en seis tamaños, lanzamiento único, velocidad en vivo, prioridad en ambos órdenes de ejecución, restauraciones pendientes y callbacks retrasados, muerte, raíz reemplazada, reejecución, cierre independiente y limpieza del registro compartido. El controlador FLY conserva sus 26 pruebas en su repositorio.
+También ejecuta **15 escenarios de integración** con el código completo de ambos controladores: distribución en seis tamaños, lanzamiento único, velocidad en vivo, prioridad en ambos órdenes de ejecución, restauraciones pendientes y callbacks retrasados, muerte, raíz reemplazada, reejecución, cierre independiente y limpieza del registro compartido.
+
+Los **25 escenarios de funciones del personaje** cubren los tres interruptores, alturas de agua y mallas, cambios de ronda, saltos y suelo, límites y reutilización de restricciones, correcciones de velocidad durante pulsos pendientes, vuelo simultáneo a 5000, muerte/reset/vacío, personajes incompletos, callbacks obsoletos, plataformas y restricciones eliminadas, vehículos compartidos o con nuevos ocupantes, limpieza y reejecución. El controlador FLY tiene **28 pruebas** en su repositorio, incluidas desactivación al caer al vacío y retirada del personaje completo. Total combinado: **110 escenarios**.
 
 Las pruebas simulan el cliente. Ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.
