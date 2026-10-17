@@ -17,12 +17,19 @@ for path,name in [('runtime/CharacterFeature.luau','createCharacterFeature'),
 compiler = LUAU.with_name("luau-compile")
 if compiler.is_file():
     subprocess.run([str(compiler), str(ROOT / "Reyzn X.lua")], check=True, stdout=subprocess.DEVNULL)
-# Main now contains the explicitly requested local velocity controller. Keep the
-# ban on downloaded code, unrelated services and the original clipboard side effect.
-for forbidden in ("loadstring", "TeleportService", "VideoFrame", 'make("Sound"', "setclipboard"):
+# Remote execution is confined to the two links expressly requested for Scripts.
+for forbidden in ("TeleportService", "VideoFrame", 'make("Sound"', "setclipboard"):
     assert forbidden not in source, forbidden
-assert source.count('game:HttpGet(') == 1, 'Only the fixed artwork downloader may use HTTP'
-assert source.count('https://') == 12, 'Only the eleven supplied images and shared fire sprite are allowed'
+remote = source.split('-- BEGIN REQUESTED REMOTE EXECUTABLES\n', 1)[1].split('-- END REQUESTED REMOTE EXECUTABLES\n', 1)[0]
+assert 'loadstring' not in source.replace(remote, '')
+assert source.count('game:HttpGet(') == 2, 'Only artwork and the explicit click launcher may use HTTP'
+assert source.count('https://') == 14, 'Twelve images and exactly two requested executable links'
+assert re.findall(r'https://scriptblox.com/[^"\s]+', source) == [
+    'https://scriptblox.com/raw/Universal-Script-Telekinesis-Ui-95037',
+    'https://scriptblox.com/raw/Natural-Disaster-Survival-Ultra-Blackhole-and-Super-ring-no-lying-Full-FE+Keyless-228862']
+loader = 'local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"\nloadstring(game:HttpGet(url .. "?build=water-antifling-20261017&t=" .. tostring(os.time())))()\n'
+assert (ROOT / 'Loader.lua').read_text() == loader, 'Keep the exact loader chosen by Reyzn'
+assert loader.rstrip() in (ROOT / 'README.md').read_text()
 assert 'validArtwork(body,asset)' in source
 # Check actual repository bytes, not just fabricated network fixtures. The
 # supplied background is JPEG despite its original .png upload filename.
@@ -37,7 +44,7 @@ for name, size, properties in assets:
         assert body[:8] == b'\x89PNG\r\n\x1a\n' and body[12:16] == b'IHDR' and body[-8:-4] == b'IEND', name
 generated = ROOT / "tests" / "_generated.luau"
 try:
-    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\nrequire('./character_features')(source,fly)\n")
+    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\nrequire('./character_features')(source,fly)\nrequire('./executables')(source)\n")
     subprocess.run([str(LUAU), str(generated)], check=True)
 finally:
     generated.unlink(missing_ok=True)

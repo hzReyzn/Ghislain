@@ -1,5 +1,6 @@
 -- Reyzn X | Made By Reyzn
--- Client GUI and opt-in features. Fixed HTTP resources are artwork, never code.
+-- Client GUI, opt-in features and two explicitly requested external launchers.
+-- External code is fetched only when its own Scripts button is pressed.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -14,7 +15,7 @@ if previous then previous:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "water-antifling-20261017"
+local BUILD = "scripts-executables-20261017"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -2588,6 +2589,57 @@ connect(UI.flyButton.Activated,function()
     if state.alive then UI.flyButton:SetAttribute("ExecutableState",ok and "ready" or "error") end
 end)
 
+-- BEGIN REQUESTED REMOTE EXECUTABLES
+-- Each launcher owns its request lock. Downloads are scoped to the Hub;
+-- a script already started keeps its independent window and lifecycle.
+UI.scriptList=frame(pages.Scripts,"ScriptExecutables",UDim2.fromOffset(0,0),UDim2.fromOffset(350,150),nil,1)
+UI.scriptExecutables={}
+local compileExternal=loadstring
+local function addScriptExecutable(name,title,url)
+    local index=#UI.scriptExecutables+1
+    local b,fx=button(UI.scriptList,name,UDim2.fromOffset(5,6+(index-1)*74),UDim2.fromOffset(340,60))
+    b.Active=true
+    local caption=label(b,"ExecutableCaption",title,UDim2.fromOffset(14,0),UDim2.new(1,-28,1,0),20,C.white,OPTION_FONT)
+    caption.TextXAlignment=Enum.TextXAlignment.Center;caption.TextWrapped=true;caption.Active=false
+    b:SetAttribute("ExecutableState","idle")
+    local busy,nextClick=false,0
+    local function finish(ok,err)
+        busy=false
+        if not ok then warn("Reyzn X: "..title.." could not start: "..tostring(err)) end
+        if state.alive and state.target~="closed" then
+            b:SetAttribute("ExecutableState",ok and "ready" or "error")
+            tween(fx.energy,.25,{Value=fx.hover and .65 or 0})
+        end
+    end
+    connect(b.Activated,function()
+        if state.target=="closed" or busy or os.clock()<nextClick then return end
+        busy=true;nextClick=os.clock()+.65
+        b:SetAttribute("ExecutableState","loading");tween(fx.energy,.15,{Value=1})
+        spawn(function()
+            local ok,chunk=pcall(function()
+                if type(compileExternal)~="function" then error("loadstring is unavailable in this environment",0) end
+                local body=game:HttpGet(url)
+                if not state.alive or state.target=="closed" then return nil end
+                if type(body)~="string" or body:match("^%s*$") then error("empty script response",0) end
+                local fn,compileError=compileExternal(body)
+                if type(fn)~="function" then error(compileError or "script could not compile",0) end
+                return fn
+            end)
+            if not state.alive or state.target=="closed" then return end
+            if not ok then finish(false,chunk);return end
+            b:SetAttribute("ExecutableState","running")
+            task.spawn(function()
+                local started,err=pcall(chunk)
+                finish(started,err)
+            end)
+        end)
+    end)
+    UI.scriptExecutables[index]={button=b,caption=caption}
+end
+addScriptExecutable("TelekinesisUI","Telekinesis UI","https://scriptblox.com/raw/Universal-Script-Telekinesis-Ui-95037")
+addScriptExecutable("SuperBlackHole","Super Black Hole","https://scriptblox.com/raw/Natural-Disaster-Survival-Ultra-Blackhole-and-Super-ring-no-lying-Full-FE+Keyless-228862")
+-- END REQUESTED REMOTE EXECUTABLES
+
 -- Put the existing labels/icons inside the press surface, while the original
 -- TextButton's touch/click rectangle remains stationary and full-sized.
 for _,record in ipairs(buttons) do
@@ -2704,6 +2756,15 @@ local function resize(initial)
     UI.flyCaption.TextSize=columnWidth<248 and 18 or 20
     pages.Main.ScrollingDirection=Enum.ScrollingDirection.XY
     pages.Main.CanvasSize=UDim2.fromOffset(cw-5<mainWidth and mainWidth+5 or 0,UI.mainColumns.Size.Y.Offset)
+    local scriptWidth=math.max(140,math.min(340,cw-16))
+    local scriptHeight=#UI.scriptExecutables*74+6
+    UI.scriptList.Size=UDim2.fromOffset(scriptWidth+10,scriptHeight)
+    for _,control in ipairs(UI.scriptExecutables) do
+        control.button.Size=UDim2.fromOffset(scriptWidth,60)
+        control.caption.TextSize=scriptWidth<248 and 18 or 20
+    end
+    pages.Scripts.ScrollingDirection=Enum.ScrollingDirection.XY
+    pages.Scripts.CanvasSize=UDim2.fromOffset(cw<scriptWidth+10 and scriptWidth+10 or 0,scriptHeight)
     local narrow=cw<360
     local heroHeight=narrow and 246 or math.min(262,math.max(156,h-8-headerH-54))
     UI.hero.Size=UDim2.new(1,-8,0,heroHeight)

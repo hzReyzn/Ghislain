@@ -6,9 +6,21 @@ Made By Reyzn.
 
 ```lua
 local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-local source = game:HttpGet(url .. "?build=water-antifling-20261017&t=" .. tostring(os.time()))
-loadstring(source)()
+loadstring(game:HttpGet(url .. "?build=water-antifling-20261017&t=" .. tostring(os.time())))()
 ```
+
+**Cargador permanente elegido por Reyzn:** mantener exactamente estas dos líneas, también después de agregar funciones o actualizar el código. Está guardado en `Loader.lua` y verificado por las pruebas. El parámetro `build=water-antifling-20261017` permanece fijo; `t` ya cambia en cada ejecución. El atributo interno `Build` del GUI puede identificar una revisión sin modificar este cargador ni la versión pública.
+
+## Scripts: ejecutables externos
+
+Dos botones compactos conservan Rajdhani, la superficie metálica, el neón y la respuesta táctil del Hub. Solo muestran sus nombres:
+
+- **Telekinesis UI** → `https://scriptblox.com/raw/Universal-Script-Telekinesis-Ui-95037`
+- **Super Black Hole** → `https://scriptblox.com/raw/Natural-Disaster-Survival-Ultra-Blackhole-and-Super-ring-no-lying-Full-FE+Keyless-228862`
+
+Cada botón descarga y ejecuta su enlace únicamente al pulsarlo. No se ejecutan al abrir el Hub ni al cambiar de sección. La descarga y ejecución tienen un bloqueo independiente por botón para evitar duplicados durante una carga; los errores de red, compilación o arranque se capturan y permiten reintentar. El estado `ExecutableState` y la consola permiten distinguir `loading`, `running`, `ready` y `error` sin añadir descripciones al GUI.
+
+Cerrar Reyzn X cancela sus descargas pendientes y evita un arranque tardío. Una vez iniciado, cada script externo conserva su propio ciclo de vida. Estos dos scripts no se reescriben ni se integran en el coordinador físico interno del Hub; sus enlaces y comportamiento dependen de la fuente externa. Las pruebas usan respuestas simuladas y no ejecutan el contenido real de ScriptBlox.
 
 ## Main: interruptores y ejecutables
 
@@ -87,7 +99,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling y FLY SS3 FE; Visuals, Scripts y Settings siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling y FLY SS3 FE. Scripts contiene Telekinesis UI y Super Black Hole; Visuals y Settings siguen vacías para el trabajo posterior.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -99,7 +111,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 El código completo está en **Reyzn X.lua**. `UpdraftFire`, `NeonFlow`, `LoadToast`, `FeatureToggle`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat visual, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar. `NoFallDamage` tiene conexiones independientes mientras está ON, para que el comportamiento no dependa de la visibilidad ni de la frecuencia de los VFX. Sus listas de conexiones se vacían en OFF y al cerrar.
 
-El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los doce recursos fijos del repositorio son once PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una descarga falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El contenido descargado por el GUI nunca se ejecuta: solo son imágenes.
+El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los doce recursos gráficos fijos del repositorio son once PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una imagen falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El descargador gráfico nunca ejecuta sus respuestas. La ejecución remota se limita a los dos enlaces solicitados en Scripts y requiere pulsar su botón.
 
 La interfaz y los VFX usan APIs nativas como UIGradient, UIStroke, UICorner, ImageLabel, UIScale, TweenService y RunService. No se añadieron shaders ni dependencias de código externas. El repositorio original `hzReyzn/scriptshz` no se modifica.
 
@@ -117,6 +129,8 @@ Las nueve pruebas nuevas cubren OFF inicial y dimensiones, pulsos/restauración 
 
 También ejecuta **15 escenarios de integración** con el código completo de ambos controladores: distribución en seis tamaños, lanzamiento único, velocidad en vivo, prioridad en ambos órdenes de ejecución, restauraciones pendientes y callbacks retrasados, muerte, raíz reemplazada, reejecución, cierre independiente y limpieza del registro compartido.
 
-Los **25 escenarios de funciones del personaje** cubren los tres interruptores, alturas de agua y mallas, cambios de ronda, saltos y suelo, límites y reutilización de restricciones, correcciones de velocidad durante pulsos pendientes, vuelo simultáneo a 5000, muerte/reset/vacío, personajes incompletos, callbacks obsoletos, plataformas y restricciones eliminadas, vehículos compartidos o con nuevos ocupantes, limpieza y reejecución. El controlador FLY tiene **28 pruebas** en su repositorio, incluidas desactivación al caer al vacío y retirada del personaje completo. Total combinado: **110 escenarios**.
+Los **25 escenarios de funciones del personaje** cubren los tres interruptores, alturas de agua y mallas, cambios de ronda, saltos y suelo, límites y reutilización de restricciones, correcciones de velocidad durante pulsos pendientes, vuelo simultáneo a 5000, muerte/reset/vacío, personajes incompletos, callbacks obsoletos, plataformas y restricciones eliminadas, vehículos compartidos o con nuevos ocupantes, limpieza y reejecución. El controlador FLY tiene **28 pruebas** en su repositorio, incluidas desactivación al caer al vacío y retirada del personaje completo.
+
+Los **8 escenarios de ejecutables** verifican los nombres/enlaces, tamaños táctiles, ausencia de ejecución automática, cargas independientes, clics repetidos, reintentos, fallos de red/compilación/arranque, cierre durante una descarga y conservación de un script externo ya iniciado. También se fija el contenido exacto de `Loader.lua`. Son **90 escenarios en Ghislain** y 28 en FLY: **118 en total**.
 
 Las pruebas simulan el cliente. Ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.

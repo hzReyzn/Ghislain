@@ -42,6 +42,7 @@ return function(source)
         for _,name in ipairs({'Main','Visuals','Scripts','Settings'}) do
             assert(find(gui,'Tab_'..name):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
             if name=='Main' then assert(#find(gui,'Page_Main'):GetChildren()==1 and find(gui,'NoFallDamage'))
+            elseif name=='Scripts' then assert(#find(gui,'Page_Scripts'):GetChildren()==1 and find(gui,'ScriptExecutables'))
             else assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty') end
         end
         assert(find(gui,'Tab_Home'):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
