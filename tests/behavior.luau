@@ -18,7 +18,7 @@ return function(source)
         local w=setup(width,height);local gui=w.run(source)
         assert(gui and gui.Name=='ReyznX');return w,gui
     end
-    local function find(gui,name) return assert(gui:FindFirstChild(name,true),'missing '..name) end
+    local function find(gui,name) return (assert(gui:FindFirstChild(name,true),'missing '..name)) end
     local function click(gui,name) find(gui,name).Activated:Fire() end
     local function close(w,gui) click(gui,'Close');w.step(30);assert(gui.Parent==nil) end
     local function near(a,b,message) assert(math.abs(a-b)<.02,message or (tostring(a)..' ~= '..tostring(b))) end
@@ -319,17 +319,17 @@ return function(source)
             assert(not aura.Active and not aura.ClipsDescendants)
             for _,o in ipairs(aura:GetDescendants())do
                 if o:IsA('GuiObject')then assert(not o.Active,'VFX captures input')end
-                if o.Name=='FlameCore'then fire+=1;assert(o.Image=='mock://ReyznX-flame-wisp-v1.png')end
-                if o.Name=='EdgeParticle'then particles+=1 end
+                if o.Name=='UpdraftCore'then fire+=1;assert(o.Image=='mock://ReyznX-flame-wisp-v1.png')end
+                if o.Name=='RisingEmber'then particles+=1 end
             end
         end
-        assert(fire==62 and particles==26,'window aura changed or unbounded effect pools')
-        local plume=dock:FindFirstChild('FlameSlot');local length=plume:FindFirstChild('FlameCore').Size.Y.Offset
+        assert(fire==63 and particles==24,'unbounded shared fire pools')
+        local plume=dock:FindFirstChild('UpdraftRoot');local length=plume:FindFirstChild('UpdraftBody').Size.Y.Offset
         local objects=#w.objects;w.step(120)
-        assert(#w.objects==objects and plume:FindFirstChild('FlameCore').Size.Y.Offset~=length,'frozen or allocating effect')
+        assert(#w.objects==objects and plume:FindFirstChild('UpdraftBody').Size.Y.Offset~=length,'frozen or allocating effect')
         for _,aura in ipairs({dock,panel})do
             for _,particle in ipairs(aura:GetChildren())do
-                if particle.Name=='EdgeParticle' and particle.Visible then
+                if particle.Name=='RisingEmber' and particle.Visible then
                     local p=particle.Position;local s=aura.Size
                     assert(p.X.Offset<-4 or p.Y.Offset<-4 or p.X.Offset>s.X.Offset+4 or p.Y.Offset>s.Y.Offset+4,'particle over content')
                 end
@@ -338,7 +338,7 @@ return function(source)
         click(gui,'Collapse');w.step(30);assert(not panel.Visible)
         click(gui,'Tab_Main');w.step(30);assert(panel.Visible)
         click(gui,'Minimize');w.step(30)
-        assert(plume:FindFirstChild('FlameCore').ImageTransparency==1,'window flame left behind')
+        assert(plume:FindFirstChild('UpdraftBody').ImageTransparency==1,'window flame left behind')
         local logoFlame=find(launcher,'UpdraftCore')
         assert(logoFlame.ImageTransparency<1)
         click(gui,'Launcher');w.step(30);assert(logoFlame.ImageTransparency==1)
@@ -359,10 +359,10 @@ return function(source)
             local active=0
             for _,auraName in ipairs({'DockAura','PanelAura','LauncherAura'}) do
                 for _,o in ipairs(find(gui,auraName):GetChildren()) do
-                    if o.Name=='FlameSlot' and o.Visible then active+=1 end
+                    if o.Name=='UpdraftRoot' and o.Visible then active+=1 end
                 end
             end
-            assert(active==62 and #w.objects==objects,'window quality was reduced or pools recreated')
+            assert(active==63 and #w.objects==objects,'window quality was reduced or pools recreated')
         end
         near(win.Position.X.Offset,pos.X.Offset);near(win.Position.Y.Offset,pos.Y.Offset)
         near(win.Size.X.Offset,size.X.Offset);near(win.Size.Y.Offset,size.Y.Offset)
@@ -399,8 +399,8 @@ return function(source)
     end)
     test('fire crossfades continuously; inward lights remain inside panels without bottom shadows',function()
         local w,gui=launch();w.step(30)
-        local slot=find(find(gui,'DockAura'),'FlameSlot')
-        local core,haze=find(slot,'FlameCore'),find(slot,'FlameHaze')
+        local slot=find(find(gui,'DockAura'),'UpdraftRoot')
+        local core,haze=find(slot,'UpdraftBody'),find(slot,'UpdraftVeil')
         local last=core.ImageTransparency;local changed=0
         for i=1,180 do
             w.step(1,1/60)
@@ -515,7 +515,7 @@ return function(source)
         end
         assert(visible<=1,'reflections compete simultaneously')
         click(gui,'Minimize');w.step(30)
-        local plume=find(gui,'DockAura'):FindFirstChild('FlameSlot');local p=plume.Position
+        local plume=find(find(gui,'DockAura'),'UpdraftBody');local p=plume.Position
         w.step(90);near(plume.Position.X.Offset,p.X.Offset);near(plume.Position.Y.Offset,p.Y.Offset)
         close(w,gui)
     end)
@@ -574,7 +574,7 @@ return function(source)
         local w,gui=launch(844,390)
         local toast=find(gui,'LoadNotification');local face=find(toast,'NotificationFace')
         local message=find(toast,'NotificationMessage');local progress=find(gui,'ToastProgress')
-        assert(message.Text=='The script has loaded successfully :))' and message.TextWrapped)
+        assert(message.Text:gsub('\n',' ')=='The script has loaded successfully :))' and message.TextWrapped)
         assert(toast.AbsolutePosition.X>844 and message.TextTransparency==1)
         for _,o in ipairs(toast:GetDescendants())do
             if o:IsA('GuiObject')then assert(not o.Active,'notification blocks game controls')end
@@ -619,7 +619,7 @@ return function(source)
         local g=slow.run(source);slow.step(310)
         assert(g:GetAttribute('LoadNotification')=='done' and not g:FindFirstChild('LoadNotification',true))
         slow.step(120);assert(g:GetAttribute('AssetFire')=='ready' and #slow.requests==12)
-        assert(not g:FindFirstChild('UpdraftBody',true):IsDescendantOf(g:FindFirstChild('Window')))
+        assert(find(find(g,'LauncherAura'),'UpdraftBody').Image=='mock://ReyznX-flame-wisp-v1.png')
         close(slow,g)
         for _,seconds in ipairs({.1,1,4.6})do
             local w,gui=launch();w.step(math.floor(seconds*60))
@@ -630,6 +630,88 @@ return function(source)
             assert(again:GetAttribute('LoadNotification')=='exiting')
             assert(find(again,'ToastProgress').Value<1)
             w.step(30);assert(current.Parent==nil and w.services.RunService.Heartbeat:Count()==0)
+        end
+    end)
+    test('window fire matches launcher colors and sends all perimeter flames upwards',function()
+        local w,gui=launch();w.step(30)
+        local expected=find(find(gui,'LauncherAura'),'UpdraftBody'):FindFirstChildOfClass('UIGradient').Color[1]
+        for _,name in ipairs({'DockAura','PanelAura'}) do
+            local aura=find(gui,name)
+            assert(not aura:FindFirstChild('FlameSlot') and not aura:FindFirstChild('EdgeEnergy'))
+            local seen={top=false,bottom=false,left=false,right=false}
+            for _,root in ipairs(aura:GetChildren())do
+                if root.Name=='UpdraftRoot' then
+                    assert(root.Rotation==nil or root.Rotation==0,'root rotates fire outwards')
+                    local p=root.Position
+                    if p.Y.Offset==4 then seen.top=true
+                    elseif p.Y.Offset>aura.Size.Y.Offset then seen.bottom=true
+                    elseif p.X.Offset<0 then seen.left=true
+                    elseif p.X.Offset>aura.Size.X.Offset then seen.right=true end
+                    local body=find(root,'UpdraftBody')
+                    assert(body.AnchorPoint.Y==1 and body.Position.Y.Offset<=0 and math.abs(body.Rotation)<9)
+                    local colors=body:FindFirstChildOfClass('UIGradient').Color[1]
+                    assert(#colors==#expected)
+                    for i,key in ipairs(colors)do
+                        for _,channel in ipairs({'R','G','B'})do near(key[2][channel],expected[i][2][channel])end
+                    end
+                end
+            end
+            assert(seen.top and seen.bottom and seen.left and seen.right)
+        end
+        close(w,gui)
+    end)
+    test('cyan neon is animated below content, never a theme option, and pauses with hidden surfaces',function()
+        local w,gui=launch();w.step(30)
+        local flows={find(find(gui,'Dock'),'SurfaceNeon'),find(find(gui,'Panel'),'SurfaceNeon'),find(gui,'HeroNeon')}
+        for _,name in ipairs({'Home','Main','Visuals','Scripts','Settings'})do
+            local tab=find(gui,'Tab_'..name);local fill=find(tab,'OptionNeon')
+            assert(fill.ZIndex<find(tab,'Caption').ZIndex and not fill.Active)
+            flows[#flows+1]=fill
+        end
+        local offsets={};local objects=#w.objects
+        for i,fill in ipairs(flows)do
+            local wash=fill:FindFirstChildOfClass('UIGradient');offsets[i]=wash.Offset.X
+            local cyan=false
+            for _,key in ipairs(wash.Color[1])do
+                local c=key[2]
+                if math.abs(c.R-141/255)<.001 and math.abs(c.G-220/255)<.001 and c.B==1 then cyan=true end
+            end
+            assert(cyan,'neon differs from approved fire blue')
+        end
+        w.step(25)
+        for i,fill in ipairs(flows)do
+            assert(fill:FindFirstChildOfClass('UIGradient').Offset.X~=offsets[i],'neon is static')
+            assert(fill.BackgroundTransparency>.7 and fill.BackgroundTransparency<1,'neon obscures content or is invisible')
+        end
+        assert(#w.objects==objects and not gui:FindFirstChild('Theme_Cyan',true))
+        local panel=flows[2]:FindFirstChildOfClass('UIGradient')
+        click(gui,'Collapse');w.step(30);local x=panel.Offset.X;w.step(30);near(panel.Offset.X,x)
+        click(gui,'Minimize');w.step(30)
+        for i,fill in ipairs(flows)do offsets[i]=fill:FindFirstChildOfClass('UIGradient').Offset.X end
+        w.step(30)
+        for i,fill in ipairs(flows)do near(fill:FindFirstChildOfClass('UIGradient').Offset.X,offsets[i]);near(fill.BackgroundTransparency,1) end
+        click(gui,'Launcher');w.step(30);click(gui,'Tab_Main');w.step(30)
+        assert(flows[2].BackgroundTransparency<1 and find(find(gui,'Tab_Main'),'OptionNeon').BackgroundTransparency<.85)
+        assert(gui:GetAttribute('Version')=='1.0')
+        close(w,gui)
+    end)
+    test('clean toast keeps two message lines above neon and removes every transient decoration',function()
+        for _,width in ipairs({320,390,844})do
+            local w,gui=launch(width,780);w.step(30)
+            local toast=find(gui,'LoadNotification');local fill=find(toast,'NotificationNeon')
+            local message=find(toast,'NotificationMessage');local badge=find(toast,'SuccessBadge')
+            assert(message.Text=='The script has loaded\nsuccessfully :))')
+            assert(message.ZIndex>fill.ZIndex and badge.ZIndex>fill.ZIndex)
+            local mp,ms=message.AbsolutePosition,message.AbsoluteSize
+            assert(mp.X>=toast.AbsolutePosition.X+55 and mp.X+ms.X<=toast.AbsolutePosition.X+toast.AbsoluteSize.X-16)
+            assert(ms.Y>=2*message.TextSize and not badge.Active and not message.Active)
+            local wash=fill:FindFirstChildOfClass('UIGradient');local x=wash.Offset.X
+            w.step(20);assert(wash.Offset.X~=x and gui:GetAttribute('LoadNotification')=='holding')
+            w.step(300);assert(fill.Parent==nil and badge.Parent==nil and not gui:FindFirstChild('NotificationNeon',true))
+            local opacity=fill.BackgroundTransparency
+            click(gui,'Tab_Settings');w.step(30);near(fill.BackgroundTransparency,opacity)
+            assert(w.services.RunService.Heartbeat:Count()==1)
+            close(w,gui)
         end
     end)
     print(tostring(count)..' scenarios passed. Rendering and real touch input still require Roblox.')

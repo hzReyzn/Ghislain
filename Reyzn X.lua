@@ -14,7 +14,7 @@ if previous then previous:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "updraft-toast-20261016"
+local BUILD = "cyan-flow-20261016"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -29,6 +29,7 @@ local C = {
     deep=Color3.fromRGB(60,31,99), green=Color3.fromRGB(132,225,179), ice=Color3.fromRGB(180,207,255),
     rose=Color3.fromRGB(212,152,219), chrome=Color3.fromRGB(235,237,247),
     pink=Color3.fromRGB(245,92,202), orchid=Color3.fromRGB(192,114,255),
+    cyan=Color3.fromRGB(141,220,255),
 }
 local state = {alive=true, target="open", page="Home", paneOpen=true,
     lastSecond=-1, phase=0, budget=0, burst=0, finishAt=0, launcherMoved=false}
@@ -161,7 +162,31 @@ end
 local metallicColors={Color3.fromRGB(39,37,49),Color3.fromRGB(23,22,32),C.black,Color3.fromRGB(25,20,36)}
 -- VFX modules share the existing lifecycle and alpha compositor. No downloaded
 -- modules, global render bindings, or full-window CanvasGroup render targets.
-local VFX={images={},auras={},buttons={},reflections={items={},nextAt=5,serial=0}}
+local VFX={images={},buttons={},reflections={items={},nextAt=5,serial=0}}
+
+-- Shared, built-in cyan accent. One translucent wash and the existing metallic
+-- stroke move together; gradients are allocated once, never rebuilt each frame.
+-- Independent phases keep navigation, surfaces and the toast from flashing in sync.
+local NeonFlow={};NeonFlow.__index=NeonFlow
+function NeonFlow.new(parent,name,radius,seed,edge)
+    local fill=frame(parent,name,UDim2.fromOffset(1,1),UDim2.new(1,-2,1,-2),Color3.new(1,1,1),1)
+    fill.Active=false;fill.ZIndex=3;corner(fill,radius)
+    local wash=gradient(fill,{C.deep,C.violet,C.cyan,C.ice,C.deep},26)
+    wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),
+        NumberSequenceKeypoint.new(.2,.75),NumberSequenceKeypoint.new(.48,.04),
+        NumberSequenceKeypoint.new(.70,.52),NumberSequenceKeypoint.new(1,1)})
+    return setmetatable({fill=fill,wash=wash,edge=edge,seed=seed},NeonFlow)
+end
+function NeonFlow:update(time,strength)
+    local phase=time*.48+self.seed
+    self.wash.Offset=Vector2.new(math.sin(phase)*.42,math.cos(phase*.67)*.07)
+    self.wash.Rotation=26+math.sin(phase*.73)*8
+    if self.edge then
+        self.edge.Offset=Vector2.new(math.sin(phase+.8)*.28,0)
+        self.edge.Rotation=24+math.sin(phase*.61)*15
+    end
+    alpha(self.fill,"BackgroundTransparency",1-strength)
+end
 local function shown(object)
     while object and object~=UI.gui do
         if object:IsA("GuiObject") and not object.Visible then return false end
@@ -215,16 +240,19 @@ local function button(parent,name,pos,size)
     face.AnchorPoint=Vector2.new(.5,.5);corner(face,10)
     local scale=make("UIScale",face,{Name="PressScale",Scale=1})
     local wash=gradient(face,metallicColors,108)
-    local selectedWash=frame(face,"SelectionWash",UDim2.fromScale(0,0),UDim2.fromScale(1,1),C.violet,1)
-    corner(selectedWash,10);gradient(selectedWash,{C.light,C.deep,C.violet},110)
+    local selectedWash=frame(face,"SelectionWash",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),1)
+    corner(selectedWash,10);local selectedGradient=gradient(selectedWash,{C.cyan,C.deep,C.violet},110)
     local edge=stroke(face,Color3.new(1,1,1),.58,1)
-    gradient(edge,{C.steel,C.silver,C.deep,C.violet},34)
+    local edgeGradient=gradient(edge,{C.steel,C.cyan,C.silver,C.deep,C.violet},34)
+    local neon=NeonFlow.new(face,"OptionNeon",9,#buttons*1.17,edgeGradient)
+    neon.fill.ZIndex=1
     local lip=frame(face,"MetalLip",UDim2.fromOffset(11,1),UDim2.new(1,-22,0,1),C.chrome,.84)
-    local lipGradient=gradient(lip,{C.steel,C.chrome,C.violet},0);fadeGradient(lipGradient)
+    local lipGradient=gradient(lip,{C.violet,C.cyan,C.chrome},0);fadeGradient(lipGradient)
     local sheen=frame(face,"Sheen",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),C.white,1)
-    corner(sheen,9); local light=gradient(sheen,{C.white,C.light},25); fadeGradient(light)
+    corner(sheen,9); local light=gradient(sheen,{C.cyan,C.white,C.light},25); fadeGradient(light)
+    lip.ZIndex=2;sheen.ZIndex=2
     local record={button=b,face=face,scale=scale,edge=edge,wash=wash,sheen=sheen,light=light,lip=lip,
-        selectionWash=selectedWash,hover=false,selected=false,pressed=false,
+        selectionWash=selectedWash,selectedGradient=selectedGradient,neon=neon,hover=false,selected=false,pressed=false,
         energy=make("NumberValue",b,{Name="InteractionLight",Value=0}),
         selection=make("NumberValue",b,{Name="SelectionBlend",Value=0})}
     record.reflection=addReflection(sheen,light,.13)
@@ -317,7 +345,7 @@ function InwardLight.new(parent,seed)
             local strip=frame(field,"GlowFeather",horizontal and UDim2.fromScale((i-1)/9,0) or UDim2.fromScale(0,(i-1)/9),
                 horizontal and UDim2.fromScale(1/9,1) or UDim2.fromScale(1,1/9),Color3.new(1,1,1),1)
             strip.Active=false
-            local wash=gradient(strip,side%2==1 and {C.pink,C.violet,C.deep} or {C.deep,C.orchid,C.rose},horizontal and 90 or 0)
+            local wash=gradient(strip,side%2==1 and {C.cyan,C.violet,C.deep} or {C.deep,C.violet,C.cyan},horizontal and 90 or 0)
             local reverse=side==2 or side==3
             wash.Transparency=NumberSequence.new({
                 NumberSequenceKeypoint.new(0,reverse and 1 or 0),
@@ -385,16 +413,17 @@ local function surface(parent,name,pos,size,scope)
     background(o,15)
     local inward=InwardLight.new(o,name=="Dock" and .7 or 2.3)
     local edge=stroke(o,Color3.new(1,1,1),.36,1)
-    local metal=gradient(edge,{C.steel,C.silver,C.violet,C.black,C.violet},24)
+    local metal=gradient(edge,{C.steel,C.cyan,C.silver,C.violet,C.black,C.cyan},24)
+    local neon=NeonFlow.new(o,"SurfaceNeon",15,name=="Dock" and .45 or 2.8,metal)
     local inner=frame(o,"InnerRim",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),nil,1)
     corner(inner,14);stroke(inner,C.silver,.94,1)
     local beam=frame(o,"EdgeLight",UDim2.fromOffset(16,0),UDim2.new(1,-32,0,1),C.white,.65)
-    local beamGradient=gradient(beam,{C.light,C.silver,C.violet},0);fadeGradient(beamGradient)
+    local beamGradient=gradient(beam,{C.violet,C.cyan,C.silver},0);fadeGradient(beamGradient)
     local sheen=frame(o,"SurfaceReflection",UDim2.fromOffset(3,3),UDim2.new(1,-6,1,-6),C.chrome,1)
     corner(sheen,14);local sweep=gradient(sheen,{C.chrome,C.ice},28);fadeGradient(sweep)
     inner.ZIndex=3;beam.ZIndex=3;sheen.ZIndex=3
     addReflection(sheen,sweep,.035)
-    return o,{edge=edge,metal=metal,beam=beam,beamGradient=beamGradient,inward=inward}
+    return o,{edge=edge,metal=metal,beam=beam,beamGradient=beamGradient,inward=inward,neon=neon}
 end
 UI.dock,UI.dockFx=surface(UI.window,"Dock",UDim2.fromOffset(0,0),UDim2.fromOffset(170,420))
 UI.dock.ZIndex=2
@@ -416,7 +445,8 @@ for i,data in ipairs({{"Home","home"},{"Main","cube"},{"Visuals","spark"},{"Scri
     local caption=label(b,"Caption",data[1],UDim2.fromOffset(45,0),UDim2.new(1,-51,1,0),19,C.muted,optionFont)
     navigation[data[1]]={button=b,fx=fx,icon=glyph,caption=caption,index=i}
 end
-UI.selectionLight=frame(UI.nav,"SelectionLight",UDim2.fromOffset(0,12),UDim2.fromOffset(2,18),C.white,0)
+UI.selectionLight=frame(UI.nav,"SelectionLight",UDim2.fromOffset(0,12),UDim2.fromOffset(2,18),Color3.new(1,1,1),0)
+gradient(UI.selectionLight,{C.violet,C.cyan,C.chrome},90)
 UI.selectionLight.ZIndex=4;corner(UI.selectionLight,2)
 UI.controls=frame(UI.dock,"WindowControls",UDim2.new(0,12,1,-50),UDim2.new(1,-24,0,36),nil,1)
 local controlArtwork={}
@@ -487,7 +517,9 @@ for _,name in ipairs({"Home","Main","Visuals","Scripts","Settings"}) do
 end
 -- The four work pages remain empty. Visual quality is always Ultra High.
 UI.hero=frame(pages.Home,"Hero",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,200),Color3.new(1,1,1))
-corner(UI.hero,13);stroke(UI.hero,C.violet,.62)
+corner(UI.hero,13)
+local heroEdge=stroke(UI.hero,Color3.new(1,1,1),.52)
+local heroMetal=gradient(heroEdge,{C.violet,C.cyan,C.silver,C.deep},28)
 gradient(UI.hero,{Color3.fromRGB(28,22,40),C.black,Color3.fromRGB(26,17,39)},32)
 local heroSheen=frame(UI.hero,"HeroReflection",UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),C.chrome,1)
 corner(heroSheen,12);local heroSweep=gradient(heroSheen,{C.chrome,C.light},28);fadeGradient(heroSweep)
@@ -495,6 +527,7 @@ addReflection(heroSheen,heroSweep,.05)
 UI.heroTitle=brandText(UI.hero,"HeroTitle",UDim2.fromOffset(20,10),UDim2.fromOffset(268,100),48)
 UI.heroTitle.ZIndex=4
 UI.heroBackground=background(UI.hero,12)
+UI.heroNeon=NeonFlow.new(UI.hero,"HeroNeon",12,4.6,heroMetal)
 heroSheen.ZIndex=3
 UI.status=frame(UI.hero,"ScriptInfo",UDim2.fromOffset(22,116),UDim2.fromOffset(188,64),nil,1)
 UI.status.ZIndex=4
@@ -542,172 +575,29 @@ UI.recoveryFallback=label(UI.recovery,"RecoveryFallback","R",UDim2.fromScale(0,0
 UI.recoveryFallback.TextXAlignment=Enum.TextXAlignment.Center
 UI.recoveryImage=imageLabel(UI.recovery,"RecoveryR",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
 
--- FireAura: two interleaved rising strands per root, with complementary lifetimes.
--- ParticlePool: fixed crystal/silver slots; all emit OUTSIDE the panel bounds.
--- Each aura is behind the opaque UI surface, never above text or hit targets.
-local FireAura={};FireAura.__index=FireAura
-local ParticlePool={};ParticlePool.__index=ParticlePool
+-- Every fire surface shares the approved minimized-logo texture, palette and
+-- complementary rising lifetimes. The window profile distributes UPWARD roots
+-- along its perimeter; it never rotates flames towards the sides or the bottom.
 local function noise(seed) return (math.sin(seed*12.9898+78.233)*43758.5453)%1 end
-local function sidePoint(side,fraction,w,h,distance,sway)
-    local inset=math.min(18,math.min(w,h)*.22)
-    if side==1 then return inset+(w-2*inset)*fraction+sway,-distance,0
-    elseif side==2 then return w+distance,inset+(h-2*inset)*fraction+sway,90
-    elseif side==3 then return inset+(w-2*inset)*fraction+sway,h+distance,180
-    else return -distance,inset+(h-2*inset)*fraction+sway,-90 end
-end
-local function contourPoint(progress,w,h)
-    local r=math.min(16,w/3,h/3)
-    local horizontal,vertical,arc=w-2*r,h-2*r,math.pi*r/2
-    local distance=progress*(2*horizontal+2*vertical+4*arc)
-    for side=1,4 do
-        local length=side%2==1 and horizontal or vertical
-        if distance<length then
-            if side==1 then return r+distance,-1,0
-            elseif side==2 then return w+1,r+distance,90
-            elseif side==3 then return w-r-distance,h+1,180
-            else return -1,h-r-distance,270 end
-        end
-        distance-=length
-        if distance<arc then
-            local angle=(side-2)*math.pi/2+distance/r
-            local cx=side<=2 and w-r or r
-            local cy=(side==1 or side==4) and r or h-r
-            return cx+(r+1)*math.cos(angle),cy+(r+1)*math.sin(angle),math.deg(angle)+90
-        end
-        distance-=arc
-    end
-    return r,-1,0
-end
-function ParticlePool.new(host,count,small)
-    local self=setmetatable({slots={},small=small},ParticlePool)
-    for i=1,count do
-        local size=(i%3==0) and 2 or 3
-        local node=frame(host,"EdgeParticle",UDim2.fromOffset(0,0),UDim2.fromOffset(size,i%3==0 and 5 or size),i%3==0 and C.silver or (i%2==0 and C.ice or C.light),1)
-        node.Active=false;node.AnchorPoint=Vector2.new(.5,.5);node.ZIndex=1
-        gradient(node,{C.chrome,C.light,C.violet},35)
-        local cross
-        if i%4==0 then
-            node.Size=UDim2.fromOffset(6,1)
-            cross=frame(node,"SilverCross",UDim2.fromScale(.5,.5),UDim2.fromOffset(1,6),C.chrome,1)
-            cross.AnchorPoint=Vector2.new(.5,.5);cross.Active=false
-        end
-        self.slots[i]={node=node,cross=cross,seed=i*1.731,cycle=-1,side=1+(i-1)%4,enabled=true}
-    end
-    return self
-end
-function ParticlePool:update(time,w,h)
-    for _,p in ipairs(self.slots) do
-        if p.enabled then
-            local lifetime=3.6+noise(p.seed)*2.8
-            local age=(time+p.seed)/lifetime
-            local cycle=math.floor(age);local progress=age-cycle
-            if p.cycle~=cycle then
-                p.cycle=cycle;p.fraction=.04+.92*noise(p.seed+cycle*7.19)
-                p.speed=6+noise(cycle+p.seed*4)*8
-                p.rotation=noise(p.seed+cycle)*150
-            end
-            local envelope=math.sin(progress*math.pi)^2
-            local x,y=sidePoint(p.side,p.fraction,w,h,9+progress*p.speed,math.sin(progress*math.pi*1.2+p.seed)*3)
-            p.node.Position=UDim2.fromOffset(x,y)
-            p.node.Rotation=p.rotation+progress*24
-            alpha(p.node,"BackgroundTransparency",1-envelope*(self.small and .38 or .54))
-            if p.cross then alpha(p.cross,"BackgroundTransparency",1-envelope*.52) end
-        end
-    end
-end
-function FireAura.new(parent,name,scope,counts,particleCount,small)
-    local host=frame(parent,name,UDim2.fromOffset(0,0),UDim2.fromOffset(100,100),nil,1,scope)
-    host.ZIndex=0;host.Active=false;host.ClipsDescendants=false
-    local self=setmetatable({host=host,plumes={},small=small,seed=#VFX.auras*.937},FireAura)
-    self.particles=ParticlePool.new(host,particleCount,small)
-    for side,count in ipairs(counts) do
-        for index=1,count do
-            local seed=side*.973+index*1.171+self.seed
-            local root=frame(host,"FlameSlot",UDim2.fromOffset(0,0),UDim2.fromOffset(40,1),nil,1)
-            root.AnchorPoint=Vector2.new(.5,1);root.Active=false
-            local layers={}
-            for layer=1,2 do
-                local image=imageLabel(root,layer==1 and "FlameHaze" or "FlameCore",UDim2.fromScale(.5,1),UDim2.fromOffset(40,45))
-                image.AnchorPoint=Vector2.new(.5,1);image.ScaleType=Enum.ScaleType.Stretch;image.Active=false
-                -- Complementary phase envelopes keep the roots alive continuously.
-                -- Narrower sprites retain real flame silhouettes instead of a
-                -- single wide, flattened texture stretched along an entire edge.
-                local colors=layer==1 and {C.rose,C.violet,C.deep} or {C.ice,C.light,C.violet}
-                local wash=gradient(image,colors,90)
-                wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),
-                    NumberSequenceKeypoint.new(.28,0),NumberSequenceKeypoint.new(.78,.06),NumberSequenceKeypoint.new(1,.56)})
-                alpha(image,"ImageTransparency",1)
-                layers[layer]=image;VFX.images[#VFX.images+1]=image
-            end
-            self.plumes[#self.plumes+1]={root=root,layers=layers,side=side,seed=seed,
-                fraction=(index-.5+(noise(seed+3)-.5)*.44)/count,count=count,rate=.39+noise(seed)*.13,
-                spread=.95+noise(seed+1)*.20,height=.73+noise(seed+2)*.55}
-        end
-    end
-    self.stream=frame(host,"EdgeEnergy",UDim2.fromOffset(0,0),UDim2.fromOffset(small and 15 or 28,1),C.chrome,.65)
-    self.stream.AnchorPoint=Vector2.new(.5,.5);self.stream.Active=false
-    local flow=gradient(self.stream,{C.violet,C.chrome,C.ice},0);fadeGradient(flow)
-    self.glint=frame(host,"CornerGlint",UDim2.fromOffset(-3,-3),UDim2.fromOffset(8,1),C.chrome,1)
-    self.glint.AnchorPoint=Vector2.new(.5,.5);self.glint.Active=false;self.glint.Rotation=25
-    self.glintCross=frame(self.glint,"Cross",UDim2.fromScale(.5,.5),UDim2.fromOffset(1,8),C.chrome,1)
-    self.glintCross.AnchorPoint=Vector2.new(.5,.5);self.glintCross.Active=false
-    VFX.auras[#VFX.auras+1]=self
-    return self
-end
-function FireAura:update(time,burst)
-    local w,h=self.host.Size.X.Offset,self.host.Size.Y.Offset
-    if w<20 or h<20 then return end
-    local scale=self.small and .43 or 1
-    for _,p in ipairs(self.plumes) do
-        local span=math.max(8,(p.side%2==1 and w or h)-36)
-        local width=math.clamp(span/p.count*1.7,30*scale,72*scale)*p.spread
-        local bend=math.sin(time*1.24+p.seed*2)*.65+math.sin(time*2.13-p.seed)*.35
-        local x,y,rotation=sidePoint(p.side,p.fraction,w,h,-3*scale,math.sin(time*.72+p.seed)*2*scale)
-        p.root.Position=UDim2.fromOffset(x,y)
-        p.root.Size=UDim2.fromOffset(width,1)
-        p.root.Rotation=rotation
-        for layer,image in ipairs(p.layers) do
-            local age=(time*p.rate+p.seed+(layer-1)*.5)%1
-            -- Zero slope at both ends: changing to the next rising strand has
-            -- neither an opacity flash nor a visible size/position discontinuity.
-            local envelope=math.sin(age*math.pi)^2
-            local length=(32+age*31+math.sin(time*1.6+p.seed+layer)*3)*scale*p.height
-            image.Size=UDim2.new(layer==1 and 1.12 or .95,0,0,length)
-            image.Position=UDim2.new(.5,scale*(bend*3+math.sin(age*math.pi)*3*(layer==1 and -1 or 1)),1,2*scale)
-            image.Rotation=bend*(layer==1 and -7 or 9)
-            local strength=layer==1 and .60 or .86
-            alpha(image,"ImageTransparency",1-envelope*math.min(.94,strength+burst*.07))
-        end
-    end
-    self.particles:update(time,w,h)
-    local x,y,angle=contourPoint((time*.065+self.seed)%1,w,h)
-    self.stream.Position=UDim2.fromOffset(x,y);self.stream.Rotation=angle
-    alpha(self.stream,"BackgroundTransparency",.63-.1*math.sin(time*.9+self.seed)^2-burst*.1)
-    local cycle=(time+self.seed*4)%7.7
-    local intensity=cycle<.8 and math.sin(cycle/.8*math.pi)^2*.5 or 0
-    local c=math.floor((time+self.seed*4)/7.7)%4
-    self.glint.Position=UDim2.fromOffset(c%2==0 and -4 or w+4,c<2 and -4 or h+4)
-    alpha(self.glint,"BackgroundTransparency",1-intensity)
-    alpha(self.glintCross,"BackgroundTransparency",1-intensity)
-end
-UI.dockAura=FireAura.new(UI.window,"DockAura","window",{4,8,4,8},10,false)
-UI.panelAura=FireAura.new(UI.window,"PanelAura","pane",{12,7,12,7},16,false)
-
--- UpdraftFire is deliberately separate from the existing window aura. Every
--- root faces UP, overlapping the next root beneath the artwork. Whole textures
--- grow, rise and crossfade with staggered lifetimes; no cut-band seams, rotated
--- stamps along four edges, new textures, shaders or frame allocations.
 local UpdraftFire={};UpdraftFire.__index=UpdraftFire
 local firePink=Color3.fromRGB(183,48,139)
 local firePurple=Color3.fromRGB(151,62,246)
-local fireCyan=Color3.fromRGB(141,220,255)
-function UpdraftFire.new(parent,name,scope,width,height,wide)
+local fireCyan=C.cyan
+function UpdraftFire.new(parent,name,scope,width,height,wide,perimeter)
     local host=frame(parent,name,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),nil,1,scope)
     host.Active=false;host.ClipsDescendants=false;host.ZIndex=0
-    local self=setmetatable({host=host,roots={},wisps={},embers={},wide=wide},UpdraftFire)
-    local count=wide and 12 or 8
-    for i=1,count do
-        local seed=i*1.713
+    local self=setmetatable({host=host,roots={},wisps={},embers={},wide=wide,perimeter=perimeter},UpdraftFire)
+    local points={}
+    if perimeter then
+        for side,count in ipairs(perimeter) do
+            for i=1,count do points[#points+1]={side=side,fraction=(i-.5)/count} end
+        end
+    else
+        local count=wide and 12 or 8
+        for i=1,count do points[i]={fraction=(i-.5)/count} end
+    end
+    for i,point in ipairs(points) do
+        local seed=i*1.713+(perimeter and #name*.23 or 0)
         local root=frame(host,"UpdraftRoot",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1),nil,1)
         root.Active=false
         local layers={}
@@ -729,7 +619,7 @@ function UpdraftFire.new(parent,name,scope,width,height,wide)
         alpha(core,"ImageTransparency",1)
         VFX.images[#VFX.images+1]=core
         self.roots[i]={node=root,layers=layers,core=core,seed=seed,
-            fraction=(i-.5)/count,height=.85+noise(seed)*.29}
+            fraction=point.fraction,side=point.side,height=.85+noise(seed)*.29}
     end
     for i=1,wide and 8 or 6 do
         local node=imageLabel(host,"RisingWisp",UDim2.fromOffset(0,0),UDim2.fromOffset(1,1))
@@ -747,12 +637,25 @@ function UpdraftFire.new(parent,name,scope,width,height,wide)
 end
 function UpdraftFire:update(time,burst)
     local w,h=self.host.Size.X.Offset,self.host.Size.Y.Offset
+    if w<20 or h<20 then return end
     local count=#self.roots
     for _,p in ipairs(self.roots) do
         local baseX=-3+(w+6)*p.fraction
         local baseY=h+2
         local height=(h+(self.wide and 27 or 40))*p.height
         local width=self.wide and (w+14)/count*2 or 47
+        if self.perimeter then
+            if p.side==1 or p.side==3 then
+                baseX=10+(w-20)*p.fraction
+                baseY=p.side==1 and 4 or h+13
+                width=math.clamp(w/self.perimeter[p.side]*1.4,18,66)
+                height=(p.side==1 and 64 or 55)*p.height
+            else
+                baseX=p.side==2 and w+3 or -3
+                baseY=16+(h-24)*p.fraction
+                width=38;height=math.clamp(h/self.perimeter[p.side]*1.45,66,92)*p.height
+            end
+        end
         p.node.Position=UDim2.fromOffset(baseX,baseY)
         for layer,image in ipairs(p.layers) do
             local age=(time*(.61+noise(p.seed)*.18)+p.seed+(layer-1)*.5)%1
@@ -773,6 +676,11 @@ function UpdraftFire:update(time,burst)
         local envelope=math.sin(age*math.pi)^2
         local x=-5+(w+10)*noise(p.seed)+math.sin(age*4+p.seed)*5*age
         local y=h+8-age*(h+(self.wide and 48 or 65))
+        if self.perimeter then
+            local side=math.floor(p.seed*10)%3
+            if side==0 then y=3-age*60
+            else x=side==1 and -8 or w+8;y=h*noise(p.seed+2)-age*62 end
+        end
         p.node.Position=UDim2.fromOffset(x,y)
         p.node.Size=UDim2.fromOffset((self.wide and 30 or 22)*(1-age*.38),42+age*13)
         p.node.Rotation=math.sin(time*2+p.seed)*7
@@ -781,10 +689,18 @@ function UpdraftFire:update(time,burst)
     for _,p in ipairs(self.embers) do
         local age=(time*p.rate+p.seed)%1
         local x=-8+(w+16)*noise(p.seed+4)+math.sin(age*5+p.seed)*4
-        p.node.Position=UDim2.fromOffset(x,h+6-age*(h+54))
+        local y=h+6-age*(h+54)
+        if self.perimeter then
+            local side=math.floor(p.seed*10)%3
+            if side==0 then y=-8-age*48
+            else x=(side==1 and -11 or w+11)+math.sin(age*5+p.seed)*3;y=h*noise(p.seed+5)-age*64 end
+        end
+        p.node.Position=UDim2.fromOffset(x,y)
         alpha(p.node,"BackgroundTransparency",1-math.sin(age*math.pi)^2*.62)
     end
 end
+UI.dockAura=UpdraftFire.new(UI.window,"DockAura","window",170,420,true,{4,6,3,6})
+UI.panelAura=UpdraftFire.new(UI.window,"PanelAura","pane",692,412,true,{14,6,10,6})
 UI.launcherAura=UpdraftFire.new(UI.launcher,"LauncherAura","launcher",68,68,false)
 
 -- One short, independent toast per execution. Its whole surface/aura slides
@@ -792,21 +708,34 @@ UI.launcherAura=UpdraftFire.new(UI.launcher,"LauncherAura","launcher",68,68,fals
 local LoadToast={};LoadToast.__index=LoadToast
 function LoadToast.new()
     UI.toastProgress=make("NumberValue",UI.gui,{Name="ToastProgress",Value=0})
-    local host=frame(UI.screen,"LoadNotification",UDim2.fromOffset(0,0),UDim2.fromOffset(330,84),nil,1,"notification")
+    local host=frame(UI.screen,"LoadNotification",UDim2.fromOffset(0,0),UDim2.fromOffset(330,90),nil,1,"notification")
     host.AnchorPoint=Vector2.new(1,1);host.ZIndex=12;host.Active=false;host.ClipsDescendants=false
     local face=frame(host,"NotificationFace",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),0)
-    face.ZIndex=2;face.Active=false;corner(face,13)
-    gradient(face,{Color3.fromRGB(30,22,43),C.black,Color3.fromRGB(20,18,30)},28)
-    local edge=stroke(face,C.silver,.48,1)
-    gradient(edge,{firePink,C.light,fireCyan},18)
-    local crown=icon(face,"crown",UDim2.fromOffset(16,29),25,C.light)
-    crown.Active=false
-    local title=label(face,"NotificationBrand","Reyzn",UDim2.fromOffset(54,9),UDim2.new(1,-70,0,21),17,C.light,Enum.Font.GrenzeGotisch)
-    title.Active=false
-    local message=label(face,"NotificationMessage","The script has loaded successfully :))",UDim2.fromOffset(54,31),UDim2.new(1,-70,0,43),18,C.white,OPTION_FONT)
-    message.TextWrapped=true;message.TextTruncate=Enum.TextTruncate.None;message.Active=false
+    face.ZIndex=2;face.Active=false;corner(face,14)
+    gradient(face,{Color3.fromRGB(19,30,42),C.black,Color3.fromRGB(25,17,34)},26)
+    local edge=stroke(face,Color3.new(1,1,1),.40,1)
+    local edgeLight=gradient(edge,{C.deep,firePurple,fireCyan,C.chrome,firePink},18)
+    local neon=NeonFlow.new(face,"NotificationNeon",13,1.9,edgeLight)
+    local badge=frame(face,"SuccessBadge",UDim2.fromOffset(15,27),UDim2.fromOffset(34,34),Color3.new(1,1,1))
+    badge.Active=false;badge.ZIndex=4;corner(badge,11)
+    gradient(badge,{Color3.fromRGB(29,48,62),Color3.fromRGB(17,16,30)},45)
+    local badgeEdge=stroke(badge,C.cyan,.46,1)
+    gradient(badgeEdge,{C.violet,C.cyan,C.chrome},35)
+    local badgeScale=make("UIScale",badge,{Scale=.94})
+    for _,line in ipairs({{12,20,7.1,45},{19.5,17.5,15.6,-50}}) do
+        local mark=frame(badge,"SuccessCheck",UDim2.fromOffset(line[1],line[2]),UDim2.fromOffset(line[3],2),C.cyan,0)
+        mark.AnchorPoint=Vector2.new(.5,.5);mark.Rotation=line[4];mark.Active=false;corner(mark,2)
+    end
+    local title=label(face,"NotificationBrand","Reyzn",UDim2.fromOffset(61,11),UDim2.new(1,-78,0,24),19,C.white,Enum.Font.GrenzeGotisch)
+    title.Active=false;title.ZIndex=4
+    local message=label(face,"NotificationMessage","The script has loaded\nsuccessfully :))",UDim2.fromOffset(61,35),UDim2.new(1,-78,0,43),18,C.silver,OPTION_FONT)
+    message.TextWrapped=true;message.TextTruncate=Enum.TextTruncate.None;message.Active=false;message.ZIndex=4
+    local glint=frame(face,"NotificationEdgeLight",UDim2.new(.1,0,0,0),UDim2.new(.48,0,0,1),Color3.new(1,1,1),.32)
+    glint.Active=false;glint.ZIndex=3
+    local glintWash=gradient(glint,{C.violet,C.cyan,C.chrome},0);fadeGradient(glintWash)
     local self=setmetatable({host=host,phase="prepared",progress=UI.toastProgress},LoadToast)
-    self.fire=UpdraftFire.new(host,"NotificationAura","notification",330,84,true)
+    self.neon=neon;self.badgeScale=badgeScale;self.badgeEdge=badgeEdge;self.glint=glint
+    self.fire=UpdraftFire.new(host,"NotificationAura","notification",330,90,true)
     self.connection=connect(self.progress.Changed,function() self:position();refreshAlpha() end)
     self:resize()
     return self
@@ -820,11 +749,12 @@ function LoadToast:position()
     if self.phase=="done" then return end
     -- The extra 78 px hides even the outermost fire at either end of the slide.
     self.host.Position=UDim2.new(1,-16+(self.width+78)*(1-self.progress.Value),1,-26)
+    self.badgeScale.Scale=.94+.06*self.progress.Value
 end
 function LoadToast:resize()
     if self.phase=="done" then return end
     self.width=math.min(330,math.max(200,UI.screen.AbsoluteSize.X-32))
-    self.host.Size=UDim2.fromOffset(self.width,84)
+    self.host.Size=UDim2.fromOffset(self.width,90)
     self.fire.host.Size=self.host.Size
     self:position()
 end
@@ -844,7 +774,7 @@ function LoadToast:destroy()
         if tweens[o] then tweens[o]:Cancel();tweens[o]=nil end
     end
     self.host:Destroy();self.progress:Destroy();UI.toastProgress=nil
-    self.fire=nil;self.host=nil;self.progress=nil
+    self.fire=nil;self.neon=nil;self.badgeScale=nil;self.badgeEdge=nil;self.glint=nil;self.host=nil;self.progress=nil
     UI.gui:SetAttribute("LoadNotification","done")
 end
 function LoadToast:dismiss(seconds)
@@ -863,6 +793,9 @@ function LoadToast:update(now,time)
         self.phase="holding";UI.gui:SetAttribute("LoadNotification","holding")
     end
     self.fire:update(time,0)
+    self.neon:update(time,.17)
+    self.glint.Position=UDim2.new(.23+.20*math.sin(time*.65),0,0,0)
+    alpha(self.badgeEdge,"Transparency",.42+.08*math.sin(time*1.2)^2)
 end
 UI.loadToast=LoadToast.new()
 
@@ -870,7 +803,7 @@ UI.loadToast=LoadToast.new()
 -- TextButton's touch/click rectangle remains stationary and full-sized.
 for _,record in ipairs(buttons) do
     for _,child in ipairs(record.button:GetChildren()) do
-        if child:IsA("GuiObject") and child~=record.face then child.Parent=record.face end
+        if child:IsA("GuiObject") and child~=record.face then child.Parent=record.face;child.ZIndex=4 end
     end
 end
 
@@ -1249,12 +1182,18 @@ connect(RunService.Heartbeat,function(dt)
     for i,fx in ipairs(VFX.surfaces) do
         if i==1 or UI.panelAura.host.Visible then
             fx.inward:update(p,state.burst)
+            fx.neon:update(p,.105+.015*math.sin(p*.7+i)^2)
             local breath=.5+.5*math.sin(p*.65+i*1.7)
             alpha(fx.beam,"BackgroundTransparency",.72-.12*breath-.12*state.burst)
             fx.beamGradient.Offset=Vector2.new(math.sin(p*.18+i)*.34,0)
         end
     end
+    for _,record in ipairs(buttons) do
+        record.neon:update(p,.085+record.selection.Value*.11+record.energy.Value*.04)
+        record.selectedGradient.Offset=record.neon.wash.Offset
+    end
     if state.page=="Home" and state.paneOpen then
+        UI.heroNeon:update(p,.085)
         UI.emblemNeon:update(p,state.burst)
         alpha(UI.statusDot,"BackgroundTransparency",.08+.12*pulse)
     end
