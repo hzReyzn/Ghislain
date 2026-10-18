@@ -5,13 +5,28 @@ Made By Reyzn.
 **Versión pública: 1.0.** Este valor se cambia únicamente cuando Reyzn lo solicita explícitamente. Las correcciones visuales no incrementan la versión. El identificador interno `Build` permite distinguir cambios de código sin alterar la versión mostrada.
 
 ```lua
-local url = "https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"
-loadstring(game:HttpGet(url .. "?build=water-antifling-20261017&t=" .. tostring(os.time())))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hzReyzn/Ghislain/main/Reyzn%20X.lua"))()
 ```
 
-**Cargador permanente elegido por Reyzn:** mantener exactamente estas dos líneas, también después de agregar funciones o actualizar el código. Está guardado en `Loader.lua` y verificado por las pruebas. El parámetro `build=water-antifling-20261017` permanece fijo; `t` ya cambia en cada ejecución. El atributo interno `Build` del GUI puede identificar una revisión sin modificar este cargador ni la versión pública.
+**Ejecutable elegido por Reyzn:** esta línea carga la rama `main`, sin fijar un commit. Sustituye al cargador anterior con parámetros; `Loader.lua` y las pruebas conservan exactamente esta línea. Después de una actualización, cierra el GUI y vuelve a ejecutarla para cargar el código publicado. La versión pública permanece **1.0**.
 
-**Para recibir una corrección:** cierra Reyzn X con su X y vuelve a ejecutar estas mismas dos líneas. Una ventana que ya estaba abierta conserva el código con el que se inició; publicar en GitHub no la actualiza en vivo. La revisión de iconos usa `Build = disaster-icons-visible-20261018` y `DisasterNoticeLayout = compact-icons-v2` en los atributos de `PlayerGui.ReyznX`.
+## Teletransportes y Settings
+
+En la columna derecha de **Main**, debajo de FLY SS3 FE:
+
+- **Teleport island:** `(-127.3518295288086, 47.61382293701172, 8.868382453918457)`.
+- **Teleport Tower:** `(-236.30526733398438, 194.6138153076172, 337.5936584472656)`.
+
+Son acciones de un clic, sin interruptor ni cooldown. Conservan la orientación y descartan la velocidad pendiente de No Fall Damage. Reinician el historial de recuperación de Antifling y las plataformas de agua sin cambiar sus interruptores ni detener FLY. Requieren un personaje vivo, libre de asiento y con raíz disponible en Natural Disaster Survival; no se encola una acción al reaparecer.
+
+En **Settings**:
+
+- **FPS COUNTER:** empieza OFF. Usa el PNG original `fps-panel-v1.png` y superpone únicamente el valor en su ventana vacía. Aparece arriba a la izquierda y admite arrastre libre con ratón o toque, incluso con el Hub minimizado. Conserva actividad y posición al morir/reaparecer. Cuenta eventos `PreRender` y divide los fotogramas por su tiempo real acumulado; actualiza el número cada medio segundo, sin imponer un máximo ni cambiar los límites gráficos del dispositivo. OFF y cierre desconectan el muestreo.
+- **Rejoin Server:** intenta volver al `JobId` actual.
+- **Server Hop:** elige aleatoriamente entre otros servidores públicos con espacio encontrados en hasta cinco páginas de 100 resultados.
+- **Server Hop Few players:** consulta en orden ascendente de población y elige el menor número disponible; acepta cero jugadores si la API lo devuelve. Sigue la paginación si la primera página solo contiene el servidor actual u opciones inválidas. No crea ni promete servidores vacíos.
+
+Las tres acciones de servidor son de un clic. Comparten un bloqueo solo mientras una búsqueda/unión está en curso, evitan el servidor actual para los saltos y descartan servidores llenos y duplicados. La búsqueda tiene timeout y dos intentos por página; un salto fallido puede probar hasta tres candidatos. Los errores se muestran con la notificación del Hub y liberan los controles. Cerrar/reiniciar el GUI cancela búsquedas y callbacks atrasados. Las listas y los viajes dependen de la disponibilidad y permisos de Roblox; no se ejecuta código devuelto por la API de servidores.
 
 ## Scripts: ejecutables externos
 
@@ -117,7 +132,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling, Disaster Prediction con consulta manual y FLY SS3 FE. Scripts contiene Telekinesis UI y Super Black Hole; Visuals y Settings siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling, Disaster Prediction con consulta manual y FLY SS3 FE. Scripts contiene Telekinesis UI y Super Black Hole; Visuals sigue vacía; Settings incluye el contador FPS y las tres acciones de servidor.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -129,7 +144,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 El código completo está en **Reyzn X.lua**. `UpdraftFire`, `NeonFlow`, `LoadToast`, `FeatureToggle`, `InwardLight`, `EmblemNeon` y el coordinador de reflejos comparten un solo Heartbeat visual, el compositor de transparencia y la limpieza de recursos. Reutilizan objetos; las animaciones ocultas se suspenden y se cancelan las conexiones, cargas y tweens al cerrar o reejecutar. `NoFallDamage` tiene conexiones independientes mientras está ON, para que el comportamiento no dependa de la visibilidad ni de la frecuencia de los VFX. Sus listas de conexiones se vacían en OFF y al cerrar.
 
-El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los catorce recursos gráficos fijos del repositorio son trece PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una imagen falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El descargador gráfico nunca ejecuta sus respuestas. La ejecución remota se limita a los dos enlaces solicitados en Scripts y requiere pulsar su botón.
+El cargador conserva la integración de este proyecto con `getcustomasset`/`getsynasset` y `writefile`; **estas funciones pertenecen al entorno de ejecución, no a Roblox Studio**. Los quince recursos gráficos fijos del repositorio son catorce PNG y un JPEG. Se valida su tamaño y firma real; `isfile`/`readfile` permiten reutilizar la caché. Si una imagen falla, la interfaz sigue operativa y utiliza los iconos nativos de respaldo. El descargador gráfico nunca ejecuta sus respuestas. La ejecución remota se limita a los dos enlaces solicitados en Scripts y requiere pulsar su botón.
 
 La interfaz y los VFX usan APIs nativas como UIGradient, UIStroke, UICorner, ImageLabel, UIScale, TweenService y RunService. No se añadieron shaders ni dependencias de código externas. El repositorio original `hzReyzn/scriptshz` no se modifica.
 
@@ -141,7 +156,7 @@ Los PNG originales y el JPEG se conservan sin modificaciones. [ASSET_NOTES.md](a
 python tests/run.py /ruta/a/luau
 ```
 
-El comando compila el Luau, comprueba el formato y tamaño de los catorce recursos reales y ejecuta **44 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable, barrido del emblema sin saltos, fuego ascendente sin asignaciones por fotograma, gestos del logo, temporización y limpieza del aviso, cambios de orientación, descargas que terminan después de desaparecer la notificación, dirección y paleta del fuego compartido, neón bajo el contenido y suspensión de las animaciones ocultas.
+El comando compila el Luau, comprueba el formato y tamaño de los quince recursos reales y ejecuta **44 escenarios deterministas**. Incluye navegación y plegado, gestos, arrastre libre, recuperación, inversiones de animación, reloj, seis tamaños de pantalla, caché/fallos de recursos, limpieza, transparencia exacta del fondo, JPEG válido/inválido, versión 1.0 estable, barrido del emblema sin saltos, fuego ascendente sin asignaciones por fotograma, gestos del logo, temporización y limpieza del aviso, cambios de orientación, descargas que terminan después de desaparecer la notificación, dirección y paleta del fuego compartido, neón bajo el contenido y suspensión de las animaciones ocultas.
 
 Las nueve pruebas nuevas cubren OFF inicial y dimensiones, pulsos/restauración de velocidad, muerte y respawn tardío, raíz reemplazada, efecto independiente de la visibilidad, restauración al apagar y coexistencia con otra escritura, cambios ON/OFF repetidos, callbacks obsoletos, cierre/destrucción/reejecución, bloqueo fuera de PlaceId 189707 y respuesta visual/táctil del control.
 
@@ -151,6 +166,6 @@ Los **25 escenarios de funciones del personaje** cubren los tres interruptores, 
 
 Los **8 escenarios de ejecutables** verifican los nombres/enlaces, tamaños táctiles, ausencia de ejecución automática, cargas independientes, clics repetidos, reintentos, fallos de red/compilación/arranque, cierre durante una descarga y conservación de un script externo ya iniciado. También se fija el contenido exacto de `Loader.lua`.
 
-Los **27 escenarios de Disaster Prediction** comprueban OFF inicial, distribución y consulta manual, sustitución del GUI anterior, fuentes y duplicados, descarte de catálogos/chat, participación local, intermisión, muerte/reset/vacío, cooldown, duración y dirección del aviso, cambios de orientación, minimización, interrupción y sustitución de avisos, consultas canceladas, limpieza, reejecución y compatibilidad con los cuatro controladores existentes. Son **119 escenarios en Ghislain**. FLY conserva además sus 28 pruebas independientes.
+Los **27 escenarios de Disaster Prediction** comprueban OFF inicial, distribución y consulta manual, sustitución del GUI anterior, fuentes y duplicados, descarte de catálogos/chat, participación local, intermisión, muerte/reset/vacío, cooldown, duración y dirección del aviso, cambios de orientación, minimización, interrupción y sustitución de avisos, consultas canceladas, limpieza, reejecución y compatibilidad con los cuatro controladores existentes. Junto a los **15 escenarios de teletransportes/FPS/servidores**, son **134 escenarios en Ghislain**. FLY conserva además sus 28 pruebas independientes.
 
 Las pruebas simulan el cliente. Ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.

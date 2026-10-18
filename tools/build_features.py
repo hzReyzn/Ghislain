@@ -9,7 +9,9 @@ for path,name in [('runtime/CharacterFeature.luau','createCharacterFeature'),
                   ('features/WalkOnWater.luau','createWalkOnWater'),
                   ('features/Antifling.luau','createAntifling'),
                   ('runtime/DisasterDetection.luau','DisasterDetection'),
-                  ('features/DisasterPrediction.luau','createDisasterPrediction')]:
+                  ('features/DisasterPrediction.luau','createDisasterPrediction'),
+                  ('features/FPSCounter.luau','createFPSCounter'),
+                  ('features/ServerTravel.luau','createServerTravel')]:
     blocks.append('local '+name+' = (function()\n'+(ROOT/path).read_text()+'end)()\n')
 start='-- BEGIN CHARACTER FEATURES\n'
 end='-- END CHARACTER FEATURES\n'

@@ -18,7 +18,7 @@ end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "disaster-icons-visible-20261018"
+local BUILD = "teleports-fps-servers-20261018"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -40,7 +40,7 @@ local state = {alive=true, target="open", page="Home", paneOpen=true,
 local UI, connections, threads, tweens = {}, {}, {}, {}
 local features = {}
 local scopes, alphaEntries, alphaLookup = {}, {}, {}
-local factors = {window=0, pane=0, page=0, launcher=0, notification=0, disaster=0, fixed=1}
+local factors = {window=0, pane=0, page=0, launcher=0, notification=0, disaster=0, fps=0, fixed=1}
 
 local function connect(signal, callback)
     local c = signal:Connect(function(...) if state.alive then callback(...) end end)
@@ -73,6 +73,7 @@ local function refreshAlpha()
     factors.launcher=UI.launcherFade.Value
     factors.notification=UI.toastProgress and UI.toastProgress.Value or 0
     factors.disaster=UI.disasterProgress and UI.disasterProgress.Value or 0
+    factors.fps=UI.fpsProgress and UI.fpsProgress.Value or 0
     for _,entry in ipairs(alphaEntries) do
         entry.object[entry.property]=1-(1-entry.base)*(factors[entry.scope] or 1)
     end
@@ -1111,10 +1112,10 @@ function DisasterToast:resize()
     self.width=math.max(200,math.min(318,UI.screen.AbsoluteSize.X-32))
     self.host.Size=UDim2.fromOffset(self.width,88);self:position()
 end
-function DisasterToast:show(kind,text)
+function DisasterToast:show(kind,text,heading)
     if not state.alive or state.target=="closed" then return end
     self.kind=kind;self.message.Text=text
-    self.title.Text=kind=="detected" and "Disaster Detected!" or "Disaster Prediction"
+    self.title.Text=heading or (kind=="detected" and "Disaster Detected!" or "Disaster Prediction")
     self:refreshIcons()
     self.host.Visible=true;self.phase="entering";self.holdAt=os.clock()+.36;self.endsAt=self.holdAt+DISASTER_HOLD;self.exitAt=nil
     self.bar.Size=UDim2.fromScale(1,1)
@@ -3119,6 +3120,157 @@ return function(ctx)
     return self
 end
 end)()
+local createFPSCounter = (function()
+-- Counts rendered frames, independent of character/Hub visibility. The half-
+-- second measurement is not an FPS cap and does not change graphics settings.
+return function(context)
+    local self={enabled=false,destroyed=false,epoch=0,frames=0,elapsed=0}
+    function self:setEnabled(enabled)
+        if self.destroyed then return false end
+        enabled=enabled==true
+        if enabled==self.enabled then return enabled end
+        self.enabled=enabled;self.epoch+=1
+        if self.connection then self.connection:Disconnect();self.connection=nil end
+        self.frames,self.elapsed=0,0
+        context.visibility(enabled)
+        if enabled then
+            context.display(nil)
+            local epoch=self.epoch
+            self.connection=context.render:Connect(function(dt)
+                if not self.enabled or self.destroyed or self.epoch~=epoch then return end
+                if type(dt)~="number" or dt<=0 or dt~=dt or dt==math.huge then return end
+                self.frames+=1;self.elapsed+=dt
+                if self.elapsed>=.5 then
+                    context.display(self.frames/self.elapsed)
+                    self.frames,self.elapsed=0,0
+                end
+            end)
+        end
+        return enabled
+    end
+    function self:destroy()
+        if self.destroyed then return end
+        self:setEnabled(false);self.destroyed=true
+    end
+    return self
+end
+end)()
+local createServerTravel = (function()
+-- Click-only travel. One in-flight request, bounded pagination/retries, no
+-- periodic server polling and no code execution from HTTP responses.
+return function(context)
+    local self={destroyed=false,busy=false,epoch=0,attempts=0,candidates={}}
+    local random=Random.new()
+    local function current(epoch)return not self.destroyed and self.busy and self.epoch==epoch end
+    local function finish(message)
+        if self.destroyed then return end
+        self.busy=false;self.epoch+=1;self.target=nil;table.clear(self.candidates)
+        context.status(false,message and "error" or "idle")
+        if message then context.notify(message) end
+    end
+    local function validServer(s)
+        return type(s)=="table" and type(s.id)=="string" and #s.id>0 and #s.id<=128
+            and s.id:match("^[%w%-]+$") and s.id~=context.jobId
+            and type(s.playing)=="number" and s.playing>=0 and s.playing%1==0
+            and type(s.maxPlayers)=="number" and s.maxPlayers>0 and s.maxPlayers%1==0
+            and s.playing<s.maxPlayers
+    end
+    local function readPage(url,epoch)
+        for attempt=1,2 do
+            if not current(epoch) then return end
+            local ok,body=pcall(context.get,url)
+            if not current(epoch) then return end
+            if ok and type(body)=="string" and #body>0 and #body<=2000000 then
+                local parsed,data=pcall(context.decode,body)
+                if parsed and type(data)=="table" and type(data.data)=="table" then return data end
+            end
+            if attempt==1 then task.wait(.75) end
+        end
+    end
+    local attemptTeleport
+    local function retry(epoch)
+        if not current(epoch) or self.retryPending then return end
+        self.target=nil;self.retryPending=true
+        if self.mode~="rejoin" and self.attempts<3 and #self.candidates>0 then
+            context.spawn(function()task.wait(.6);if current(epoch) then attemptTeleport(epoch) end end)
+        else finish("Unable to join this server. Please try again.") end
+    end
+    attemptTeleport=function(epoch)
+        if not current(epoch) then return end
+        self.retryPending=false
+        local target
+        if self.mode=="rejoin" then target=context.jobId
+        else
+            if #self.candidates==0 then finish("No other public server is available.");return end
+            local index=self.mode=="few" and 1 or random:NextInteger(1,#self.candidates)
+            target=table.remove(self.candidates,index).id
+        end
+        if type(target)~="string" or target=="" then finish("This server cannot be rejoined.");return end
+        self.attempts+=1;local attempt=self.attempts;self.target=target
+        context.status(true,"joining",target)
+        local ok=pcall(function()context.teleport:TeleportToPlaceInstance(context.placeId,target,context.player)end)
+        if not current(epoch) then return end
+        if not ok then retry(epoch);return end
+        context.spawn(function()
+            task.wait(18)
+            if current(epoch) and self.attempts==attempt then finish("The server did not respond. Please try again.") end
+        end)
+    end
+    self.failure=context.teleport.TeleportInitFailed:Connect(function(who,_,_,placeId,options)
+        if who~=context.player or placeId~=context.placeId or not self.busy or not self.target then return end
+        if options then
+            local ok,id=pcall(function()return options.ServerInstanceId end)
+            if ok and type(id)=="string" and id~="" and id~=self.target then return end
+        end
+        retry(self.epoch)
+    end)
+    function self:start(mode)
+        if self.destroyed or self.busy or (mode~="rejoin" and mode~="random" and mode~="few") then return false end
+        self.busy=true;self.epoch+=1;self.mode=mode;self.attempts=0;self.target=nil;self.retryPending=false;table.clear(self.candidates)
+        local epoch=self.epoch
+        context.status(true,mode=="rejoin" and "joining" or "searching")
+        context.spawn(function()
+            if mode=="rejoin" then attemptTeleport(epoch);return end
+            local cursor,seen,seenCursors=nil,{},{}
+            for _=1,5 do
+                if not current(epoch) then return end
+                local url="https://games.roblox.com/v1/games/"..context.placeId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+                if cursor then url..="&cursor="..context.encode(cursor) end
+                local page=readPage(url,epoch)
+                if not current(epoch) then return end
+                if not page then
+                    if #self.candidates==0 then finish("Unable to load the server list. Please try again.");return end
+                    break
+                end
+                for index,s in ipairs(page.data)do
+                    if index>100 then break end
+                    if validServer(s) and not seen[s.id] then
+                        seen[s.id]=true;self.candidates[#self.candidates+1]={id=s.id,playing=s.playing}
+                    end
+                end
+                -- Ascending population: the first eligible page already has
+                -- the lowest available counts; don't scan every server for it.
+                if mode=="few" and #self.candidates>0 then break end
+                cursor=page.nextPageCursor
+                if type(cursor)~="string" or cursor=="" or #cursor>2048 or seenCursors[cursor] then break end
+                seenCursors[cursor]=true;task.wait(.2)
+            end
+            table.sort(self.candidates,function(a,b)return a.playing<b.playing or (a.playing==b.playing and a.id<b.id)end)
+            attemptTeleport(epoch)
+        end)
+        context.spawn(function()
+            task.wait(20)
+            if current(epoch) and self.attempts==0 then finish("Server search timed out. Please try again.") end
+        end)
+        return true
+    end
+    function self:destroy()
+        if self.destroyed then return end
+        self.destroyed=true;self.busy=false;self.epoch+=1;self.failure:Disconnect();table.clear(self.candidates)
+    end
+    return self
+end
+end)()
 -- END CHARACTER FEATURES
 
 -- Main executable integration.
@@ -3205,6 +3357,102 @@ connect(UI.flyButton.Activated,function()
     end
     if state.alive then UI.flyButton:SetAttribute("ExecutableState",ok and "ready" or "error") end
 end)
+
+-- Local click actions; no queued teleport after death/respawn and no cooldown.
+UI.mainActions={}
+local function actionButton(parent,name,title,callback)
+    local b,fx=button(parent,name,UDim2.fromOffset(5,6),UDim2.fromOffset(272,60))
+    b.Active=true;b:SetAttribute("ExecutableState","idle")
+    local caption=label(b,"ExecutableCaption",title,UDim2.fromOffset(14,0),UDim2.new(1,-28,1,0),20,C.white,OPTION_FONT)
+    caption.TextXAlignment=Enum.TextXAlignment.Center;caption.TextWrapped=true;caption.Active=false
+    connect(b.Activated,function()
+        if state.target=="closed" then return end
+        fx.scale.Scale=.977;tween(fx.scale,.22,{Scale=1});callback(b)
+    end)
+    return {button=b,caption=caption}
+end
+local function teleportCharacter(b,destination)
+    local character=player.Character
+    local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+    local root=character and character:FindFirstChild("HumanoidRootPart")
+    local message
+    if game.PlaceId~=189707 then message="This destination is only available in Natural Disaster Survival."
+    elseif not character or not character:IsDescendantOf(workspace) or not humanoid or humanoid.Health<=0
+        or not root or not root:IsA("BasePart") or root.Anchored then message="Your character is not ready to teleport."
+    elseif humanoid.SeatPart then message="Leave your seat before teleporting." end
+    if message then
+        b:SetAttribute("ExecutableState","error");UI.disasterToast:show("error",message,"Teleport");return
+    end
+    -- Retire recovery/platform history without changing the ON/OFF switches.
+    -- writeVelocity also invalidates pending principal/FLY No Fall Damage pulses.
+    features.antifling:reset("teleport");features.walkOnWater:reset("teleport")
+    motion:writeVelocity(root,Vector3.zero);root.AssemblyAngularVelocity=Vector3.zero
+    root.CFrame=CFrame.new(destination)*root.CFrame.Rotation
+    motion:markCarry(root)
+    b:SetAttribute("ExecutableState","ready")
+    b:SetAttribute("Uses",(b:GetAttribute("Uses") or 0)+1)
+end
+for _,data in ipairs({
+    {"TeleportIsland","Teleport island",Vector3.new(-127.3518295288086,47.61382293701172,8.868382453918457)},
+    {"TeleportTower","Teleport Tower",Vector3.new(-236.30526733398438,194.6138153076172,337.5936584472656)},
+})do
+    local destination=data[3]
+    local action=actionButton(UI.mainRight,data[1],data[2],function(b)teleportCharacter(b,destination)end)
+    action.button:SetAttribute("Destination",destination);UI.mainActions[#UI.mainActions+1]=action
+end
+
+-- Screen-owned FPS panel: the original PNG is unchanged; only live numbers
+-- are overlaid inside its empty window. It stays independent of the character.
+UI.fpsProgress=make("NumberValue",UI.gui,{Name="FPSOpacity",Value=0})
+UI.fpsHost=frame(UI.screen,"FPSOverlay",UDim2.fromOffset(12,12),UDim2.fromOffset(300,100),nil,1,"fps")
+UI.fpsHost.ZIndex=22;UI.fpsHost.Active=true;UI.fpsHost.Visible=false
+UI.fpsFallback=frame(UI.fpsHost,"FPSFallback",UDim2.fromScale(.03,.16),UDim2.fromScale(.93,.68),C.base,.03)
+UI.fpsFallback.Active=false;corner(UI.fpsFallback,12);stroke(UI.fpsFallback,C.violet,.35,1)
+local fpsFallbackTitle=label(UI.fpsFallback,"FPSCaption","FPS",UDim2.fromScale(.16,0),UDim2.fromScale(.28,1),25,C.silver,OPTION_FONT)
+fpsFallbackTitle.Active=false;fpsFallbackTitle.TextXAlignment=Enum.TextXAlignment.Center
+UI.fpsImage=imageLabel(UI.fpsHost,"FPSArtwork",UDim2.fromScale(0,0),UDim2.fromScale(1,1))
+UI.fpsImage.ZIndex=2;UI.fpsImage.Active=false
+UI.fpsValue=label(UI.fpsHost,"FPSValue","--",UDim2.fromScale(.51,.35),UDim2.fromScale(.39,.30),32,C.chrome,Enum.Font.RobotoMono)
+UI.fpsValue.ZIndex=3;UI.fpsValue.Active=false;UI.fpsValue.TextXAlignment=Enum.TextXAlignment.Center
+UI.fpsValue.TextScaled=true;UI.fpsValue.TextTruncate=Enum.TextTruncate.None
+make("UITextSizeConstraint",UI.fpsValue,{MinTextSize=10,MaxTextSize=34})
+connect(UI.fpsProgress.Changed,function()
+    refreshAlpha()
+    if UI.fpsProgress.Value==0 then UI.fpsHost.Visible=false end
+end)
+features.fpsCounter=createFPSCounter({render=RunService.PreRender,
+    visibility=function(enabled)
+        if not enabled and state.drag and state.drag.target==UI.fpsHost then state.drag=nil end
+        if enabled then UI.fpsHost.Visible=true end
+        tween(UI.fpsProgress,.18,{Value=enabled and 1 or 0})
+    end,
+    display=function(fps)
+        UI.fpsValue.Text=fps and string.format("%.0f",fps) or "--"
+        UI.gui:SetAttribute("MeasuredFPS",fps)
+    end})
+UI.settingsList=frame(pages.Settings,"SettingsOptions",UDim2.fromOffset(0,0),UDim2.fromOffset(350,300),nil,1)
+UI.fpsToggle=FeatureToggle.new(UI.settingsList,"FPSCounter","FPS COUNTER",features.fpsCounter)
+UI.serverActions={}
+features.serverTravel=createServerTravel({player=player,placeId=game.PlaceId,jobId=game.JobId,
+    teleport=game:GetService("TeleportService"),spawn=spawn,
+    get=function(url)return game:HttpGet(url)end,
+    decode=function(body)return game:GetService("HttpService"):JSONDecode(body)end,
+    encode=function(value)return game:GetService("HttpService"):UrlEncode(value)end,
+    notify=function(message)UI.disasterToast:show("error",message,"Server Travel")end,
+    status=function(busy,status,target)
+        UI.gui:SetAttribute("ServerTravelState",status);UI.gui:SetAttribute("ServerTravelTarget",target)
+        for _,action in ipairs(UI.serverActions)do
+            action.button.Active=not busy;action.button.Selectable=not busy
+            action.button:SetAttribute("ExecutableState",status)
+            action.caption.TextColor3=busy and C.muted or C.white
+        end
+    end})
+UI.gui:SetAttribute("ServerTravelState","idle")
+for _,data in ipairs({{"RejoinServer","Rejoin Server","rejoin"},{"ServerHop","Server Hop","random"},
+    {"ServerHopFewPlayers","Server Hop Few players","few"}})do
+    local mode=data[3]
+    UI.serverActions[#UI.serverActions+1]=actionButton(UI.settingsList,data[1],data[2],function()features.serverTravel:start(mode)end)
+end
 
 -- BEGIN REQUESTED REMOTE EXECUTABLES
 -- Each launcher owns its request lock. Downloads are scoped to the Hub;
@@ -3294,6 +3542,8 @@ local function resize(initial)
     if v.X<1 or v.Y<1 then return end
     UI.loadToast:resize()
     UI.disasterToast:resize()
+    local fpsWidth=math.min(300,math.max(180,v.X-24))
+    UI.fpsHost.Size=UDim2.fromOffset(fpsWidth,fpsWidth/3)
     layout.width=math.min(880,math.floor(v.X*(v.X<600 and .94 or .86)))
     layout.height=math.min(420,math.floor(v.Y*.82))
     layout.dockWidth=v.X<320 and 110 or (v.X<600 and 126 or 170)
@@ -3376,6 +3626,10 @@ local function resize(initial)
     UI.mainDivider.Size=UDim2.new(0,1,1,-12)
     UI.flyButton.Size=UDim2.fromOffset(UI.noFallToggle.button.Size.X.Offset,rowHeight)
     UI.flyCaption.TextSize=columnWidth<248 and 18 or 20
+    for index,action in ipairs(UI.mainActions)do
+        action.button.Position=UDim2.fromOffset(5,6+index*(rowHeight+12))
+        action.button.Size=UI.flyButton.Size;action.caption.TextSize=UI.flyCaption.TextSize
+    end
     pages.Main.ScrollingDirection=Enum.ScrollingDirection.XY
     pages.Main.CanvasSize=UDim2.fromOffset(cw-5<mainWidth and mainWidth+5 or 0,UI.mainColumns.Size.Y.Offset)
     local scriptWidth=math.max(140,math.min(340,cw-16))
@@ -3387,6 +3641,16 @@ local function resize(initial)
     end
     pages.Scripts.ScrollingDirection=Enum.ScrollingDirection.XY
     pages.Scripts.CanvasSize=UDim2.fromOffset(cw<scriptWidth+10 and scriptWidth+10 or 0,scriptHeight)
+    UI.fpsToggle:resize(scriptWidth+16)
+    local settingsY=UI.fpsToggle.button.Size.Y.Offset+18
+    for index,action in ipairs(UI.serverActions)do
+        action.button.Position=UDim2.fromOffset(5,settingsY+(index-1)*72)
+        action.button.Size=UDim2.fromOffset(scriptWidth,60);action.caption.TextSize=scriptWidth<248 and 17 or 20
+    end
+    local settingsHeight=settingsY+#UI.serverActions*72
+    UI.settingsList.Size=UDim2.fromOffset(scriptWidth+10,settingsHeight)
+    pages.Settings.ScrollingDirection=Enum.ScrollingDirection.XY
+    pages.Settings.CanvasSize=UDim2.fromOffset(cw<scriptWidth+10 and scriptWidth+10 or 0,settingsHeight)
     local narrow=cw<360
     local heroHeight=narrow and 246 or math.min(262,math.max(156,h-8-headerH-54))
     UI.hero.Size=UDim2.new(1,-8,0,heroHeight)
@@ -3466,6 +3730,7 @@ local function transition(target)
     UI.recovery.Visible=false
     if target=="closed" then
         UI.loadToast:dismiss(.22);UI.disasterToast:dismiss(.22);features.disasterPrediction:destroy()
+        features.serverTravel:destroy();features.fpsCounter:destroy()
     end
     if target=="open" then
         UI.window.Visible=true
@@ -3497,6 +3762,9 @@ local function beginDrag(target,input)
 end
 connect(UI.dragArea.InputBegan,function(input) beginDrag(UI.window,input) end)
 connect(UI.panelDrag.InputBegan,function(input) beginDrag(UI.window,input) end)
+connect(UI.fpsHost.InputBegan,function(input)
+    if features.fpsCounter.enabled then beginDrag(UI.fpsHost,input) end
+end)
 connect(UI.launcher.InputBegan,function(input)
     beginDrag(UI.launcher,input)
     if state.drag and state.drag.target==UI.launcher and state.drag.input==input then
@@ -3538,6 +3806,7 @@ end)
 -- The previous wordmark PNG remains in the repository but is no longer loaded.
 -- Custom artwork needs the executor's local asset API; failure never blocks the GUI.
 local ASSETS={
+    FPSPanel={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/fps-panel-v1.png",file="ReyznX-fps-panel-v1.png",bytes=1502075,refresh=true,images={UI.fpsImage}},
     DisasterSuccess={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-success-v1.png",file="ReyznX-disaster-success-v1.png",bytes=1346483,refresh=true,images={UI.disasterToast.icons.detected.image,UI.disasterToast.icons.detected.glow}},
     DisasterFailure={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-failure-v1.png",file="ReyznX-disaster-failure-v1.png",bytes=1491592,refresh=true,images={UI.disasterToast.icons.unavailable.image,UI.disasterToast.icons.unavailable.glow}},
     IconHome={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-home-v1.png",file="ReyznX-icon-home-v1.png",bytes=1933132,images=artworkImages.IconHome},
@@ -3648,6 +3917,8 @@ connect(RunService.Heartbeat,function(dt)
     if p>=(state.assetPoll or 0) then
         state.assetPoll=p+.2
         UI.disasterToast:refreshIcons()
+        UI.fpsFallback.Visible=UI.fpsImage.Image=="" or not UI.fpsImage.IsLoaded
+        if not UI.fpsFallback.Visible then UI.gui:SetAttribute("AssetFPSPanel","ready") end
         UI.avatarFallback.Visible=UI.avatar.Image=="" or not UI.avatar.IsLoaded
         UI.rFallback.Visible=UI.launcherImage.Image=="" or not UI.launcherImage.IsLoaded
         UI.recoveryFallback.Visible=UI.recoveryImage.Image=="" or not UI.recoveryImage.IsLoaded
@@ -3702,5 +3973,6 @@ connect(RunService.Heartbeat,function(dt)
     if state.page=="Main" and state.paneOpen then
         for _,control in ipairs(UI.featureToggles) do control:update(p) end
     end
+    if state.page=="Settings" and state.paneOpen then UI.fpsToggle:update(p) end
 end)
 return UI.gui

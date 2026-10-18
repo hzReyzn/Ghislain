@@ -5,7 +5,7 @@ return function(source)
     local function png(bytes) return '\137PNG\13\10\26\10'..'\0\0\0\13IHDR'..string.rep('a',bytes-24)..'IEND\174\66\96\130' end
     local artwork={['launcher-r-v1.png']=png(2136070),['emblem-x-v1.png']=png(1699126),['flame-wisp-v1.png']=png(1172326),['minimize-v1.png']=png(1283532),['collapse-v1.png']=png(1337784),['close-v1.png']=png(1570916)}
     for name,bytes in pairs({['icon-home-v1.png']=1933132,['icon-main-v1.png']=2142879,
-        ['icon-scripts-v1.png']=2546120,['icon-settings-v1.png']=1892474,['icon-visuals-v1.png']=1628114,['disaster-success-v1.png']=1346483,['disaster-failure-v1.png']=1491592}) do
+        ['icon-scripts-v1.png']=2546120,['icon-settings-v1.png']=1892474,['icon-visuals-v1.png']=1628114,['disaster-success-v1.png']=1346483,['disaster-failure-v1.png']=1491592,['fps-panel-v1.png']=1502075}) do
         artwork[name]=png(bytes)
     end
     artwork['background-cyber-v2.jpg']='\255\216\255\224'..string.rep('a',167325-6)..'\255\217'
@@ -43,6 +43,7 @@ return function(source)
             assert(find(gui,'Tab_'..name):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
             if name=='Main' then assert(#find(gui,'Page_Main'):GetChildren()==1 and find(gui,'NoFallDamage'))
             elseif name=='Scripts' then assert(#find(gui,'Page_Scripts'):GetChildren()==1 and find(gui,'ScriptExecutables'))
+            elseif name=='Settings' then assert(find(gui,'SettingsOptions') and find(gui,'FPSCounter'))
             else assert(#find(gui,'Page_'..name):GetChildren()==0,'section should be empty') end
         end
         assert(find(gui,'Tab_Home'):FindFirstChild('Caption',true).FontFace.Family=='rbxassetid://12187375422')
@@ -59,7 +60,7 @@ return function(source)
     end)
     test('supplied PNGs load once, register locally and preserve transparency',function()
         local w,gui=launch();w.step(30)
-        assert(#w.requests==14 and #w.writes==14)
+        assert(#w.requests==15 and #w.writes==15)
         assert(w.files['ReyznX-launcher-r-v1.png']==artwork['launcher-r-v1.png'])
         assert(w.files['ReyznX-emblem-x-v1.png']==artwork['emblem-x-v1.png'])
         assert(find(gui,'DisasterSuccessIcon').Image=='mock://ReyznX-disaster-success-v1.png')
@@ -76,7 +77,7 @@ return function(source)
         click(gui,'Minimize');w.step(30)
         assert(find(gui,'LauncherR').ImageTransparency==0 and find(gui,'Launcher').BackgroundTransparency==1)
         local again=w.run(source);w.step(30)
-        assert(gui.Parent==nil and #w.requests==14 and #w.writes==14,'valid cache was downloaded again')
+        assert(gui.Parent==nil and #w.requests==15 and #w.writes==15,'valid cache was downloaded again')
         close(w,again)
     end)
     test('disaster icons render when preload only caches hidden textures',function()
@@ -98,9 +99,10 @@ return function(source)
     end)
     test('notice artwork retries bypass cached missing responses and then reuses valid local files',function()
         local w=setup();local get=w.env.game.HttpGet;local attempts={}
+        local guiBuild=source:match('local BUILD = "([^"]+)"')
         w.env.game.HttpGet=function(self,url)
             if url:find('/disaster-',1,true)then
-                assert(url:find('?build=disaster-icons-visible-20261018',1,true),'missing image cache revision')
+                assert(url:find('?build='..guiBuild,1,true),'missing image cache revision')
                 local base=url:match('^[^?]+');attempts[base]=(attempts[base] or 0)+1
                 if attempts[base]==1 then
                     w.requests[#w.requests+1]=url
@@ -291,7 +293,7 @@ return function(source)
         local broken=setup();broken.http[URL..'emblem-x-v1.png']='<html>not an image</html>'
         local g=broken.run(source);broken.step(90)
         assert(g:GetAttribute('AssetX')=='failed' and find(g,'XFallback').Visible)
-        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==15)
+        assert(broken.files['ReyznX-emblem-x-v1.png']==nil and #broken.requests==16)
         click(g,'Tab_Main');broken.step(30);assert(g:GetAttribute('Page')=='Main');close(broken,g)
     end)
     test('missing asset APIs/network/write errors leave controls and clock usable',function()
@@ -303,7 +305,7 @@ return function(source)
             else w.assetApiFailure=true end
             local gui=w.run(source);w.step(100)
             assert(find(gui,'XFallback').Visible and gui:GetAttribute('ElapsedSeconds')>=1)
-            assert(#w.requests<=28,'unbounded retries')
+            assert(#w.requests<=30,'unbounded retries')
             click(gui,'Minimize');w.step(30);assert(find(gui,'Launcher').Visible)
             click(gui,'Launcher');w.step(30);assert(find(gui,'Dock').BackgroundTransparency==0)
             close(w,gui)
@@ -399,7 +401,7 @@ return function(source)
         end
         local win=find(gui,'Window');local pos,size=win.Position,win.Size;local objects=#w.objects
         click(gui,'Tab_Settings');w.step(30)
-        assert(#find(gui,'Page_Settings'):GetChildren()==0)
+        assert(find(gui,'SettingsOptions'))
         for _,dt in ipairs({1/20,1/30,1/120}) do
             w.step(240,dt)
             assert(gui:GetAttribute('EffectiveQuality')=='Ultra High' and gui:GetAttribute('VFXRate')==60)
@@ -665,7 +667,7 @@ return function(source)
         local slow=setup();slow.httpDelay=6
         local g=slow.run(source);slow.step(310)
         assert(g:GetAttribute('LoadNotification')=='done' and not g:FindFirstChild('LoadNotification',true))
-        slow.step(120);assert(g:GetAttribute('AssetFire')=='ready' and #slow.requests==14)
+        slow.step(120);assert(g:GetAttribute('AssetFire')=='ready' and #slow.requests==15)
         assert(find(find(g,'LauncherAura'),'UpdraftBody').Image=='mock://ReyznX-flame-wisp-v1.png')
         close(slow,g)
         for _,seconds in ipairs({.1,1,4.6})do

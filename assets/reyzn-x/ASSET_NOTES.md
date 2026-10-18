@@ -35,3 +35,7 @@ Prompt utilizado:
 El PNG `launcher-r-v1.png` se conserva sin editar. Solo el logo minimizado y su reflejo usan `ImageRectOffset = (88, 104)` e `ImageRectSize = (1080, 1040)` para aprovechar la región de la imagen dentro del botón de 68 × 68. La R auxiliar de recuperación conserva la presentación anterior.
 
 `UpdraftFire` reutiliza `flame-wisp-v1.png` para las llamas del logo minimizado y el aviso de carga. Las capas de cuerpo muestran la región `(110, 0, 1040, 1254)` del mismo recurso y se mezclan completas, sin dividirlas en franjas. No se modifican los bytes ni se añaden recursos remotos. El menú y el panel también utilizan ahora esta textura, paleta y animación ascendente; sus fuentes se distribuyen por el perímetro sin girar las llamas hacia los lados o hacia abajo. El celeste RGB(141, 220, 255) del fuego se comparte con los degradados animados del GUI y de la notificación, sin crear nuevos recursos de imagen.
+
+## Contador FPS
+
+`fps-panel-v1.png` es una copia byte por byte del adjunto `1000191097.png`: PNG RGBA de 2172 × 724, 1 502 075 bytes. No se recorta, convierte ni recomprime. Un `ImageLabel` conserva su relación 3:1; el número en vivo se coloca en la ventana derecha de la imagen, separado del logo y del texto FPS.

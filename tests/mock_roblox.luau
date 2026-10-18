@@ -229,7 +229,14 @@ local function newWorld()
     end}
     env.typeof=function(v)if type(v)=='table' and v._props then return 'Instance'end;if getmetatable(v)==vec then return 'Vector3'end;return type(v)end
     local services={}
-    services.RunService={PreSimulation=signal(),PostSimulation=signal(),Heartbeat=signal(),RenderStepped=signal()}
+    services.RunService={PreSimulation=signal(),PostSimulation=signal(),Heartbeat=signal(),RenderStepped=signal(),PreRender=signal()}
+    W.teleportCalls={};W.json={}
+    services.TeleportService={TeleportInitFailed=signal(),TeleportToPlaceInstance=function(_,place,job,who)
+        W.teleportCalls[#W.teleportCalls+1]={place=place,job=job,player=who}
+        if W.teleportError then error('teleport unavailable') end
+    end}
+    services.HttpService={JSONDecode=function(_,body)return assert(W.json[body],'invalid JSON fixture')end,
+        UrlEncode=function(_,value)return (value:gsub('[^%w%-_%.~]',function(c)return string.format('%%%02X',string.byte(c))end))end}
     services.TweenService={Create=function(_,object,info,props)
         local t={Completed=signal(),cancelled=false,object=object,props=props,duration=info[1] or .1,start={}}
         function t:Cancel()self.cancelled=true end
@@ -356,7 +363,7 @@ local function newWorld()
                     if object.TimePosition>=object.TimeLength then object.Playing=false;object.IsPlaying=false;object.Ended:Fire() end
                 end
             end
-            for _,key in ipairs({'PreSimulation','PostSimulation','Heartbeat','RenderStepped'})do services.RunService[key]:Fire(dt)end
+            for _,key in ipairs({'PreSimulation','PostSimulation','Heartbeat','RenderStepped','PreRender'})do services.RunService[key]:Fire(dt)end
             local pending=W.tasks;W.tasks={}
             for _,t in ipairs(pending)do if t.at<=W.time then W.resume(t.co,table.unpack(t.args))else W.tasks[#W.tasks+1]=t end end
         end
