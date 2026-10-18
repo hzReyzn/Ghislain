@@ -18,7 +18,7 @@ if previousPrediction then previousPrediction:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "disaster-prediction-20261017"
+local BUILD = "disaster-notice-icons-20261018"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -1015,66 +1015,103 @@ function LoadToast:update(now,time)
 end
 UI.loadToast=LoadToast.new()
 
--- Reused top-right notice. It belongs to the screen, not the moving Hub.
--- One surface, one fade clock, no allocation or growing queue per notification.
+-- Reused top-right notice. Screen-owned; five full seconds AFTER the entrance.
+-- Original user PNGs stay untinted. Glow copies and three small glints are pooled,
+-- update only while visible, and share the existing alpha/Heartbeat lifecycle.
 local DisasterToast={};DisasterToast.__index=DisasterToast
+local DISASTER_HOLD=5
 function DisasterToast.new()
     UI.disasterProgress=make("NumberValue",UI.gui,{Name="DisasterOpacity",Value=0})
-    local host=frame(UI.screen,"DisasterNotification",UDim2.fromOffset(0,16),UDim2.fromOffset(358,110),nil,1,"disaster")
+    local host=frame(UI.screen,"DisasterNotification",UDim2.fromOffset(0,16),UDim2.fromOffset(318,88),nil,1,"disaster")
     host.AnchorPoint=Vector2.new(1,0);host.ZIndex=20;host.Active=false;host.Visible=false
     local halos={}
     for i=1,2 do
         local halo=frame(host,"DisasterHalo",UDim2.fromOffset(-i*2,-i*2),UDim2.new(1,i*4,1,i*4),nil,1)
-        halo.ZIndex=0;halo.Active=false;corner(halo,14+i*2)
-        local edge=stroke(halo,Color3.new(1,1,1),i==1 and .72 or .90,i==1 and 2 or 3)
+        halo.ZIndex=0;halo.Active=false;corner(halo,13+i*2)
+        local edge=stroke(halo,Color3.new(1,1,1),i==1 and .80 or .94,i==1 and 1.5 or 2)
         local wash=gradient(edge,{C.deep,C.violet,C.cyan,C.ice,C.rose,C.deep},24)
         fadeGradient(wash);halos[i]=wash
     end
     local face=frame(host,"DisasterFace",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1))
-    face.Active=false;face.ZIndex=2;corner(face,14)
-    gradient(face,{Color3.fromRGB(23,31,45),C.black,Color3.fromRGB(26,17,38)},24)
+    face.Active=false;face.ZIndex=2;corner(face,13)
+    gradient(face,{Color3.fromRGB(23,28,42),Color3.fromRGB(12,12,19),Color3.fromRGB(27,19,37)},24)
     local edge=stroke(face,Color3.new(1,1,1),.28,1)
     local light=gradient(edge,{C.deep,C.violet,C.cyan,C.chrome,C.rose},22)
-    local neon=NeonFlow.new(face,"DisasterNeon",13,7.4,light)
-    local badge=frame(face,"DisasterBadge",UDim2.fromOffset(16,18),UDim2.fromOffset(34,34),Color3.new(1,1,1))
-    badge.Active=false;badge.ZIndex=4;corner(badge,11)
-    gradient(badge,{Color3.fromRGB(27,47,61),Color3.fromRGB(26,18,39)},32)
-    stroke(badge,C.cyan,.50,1)
-    local glyph=label(badge,"DisasterGlyph","✦",UDim2.fromScale(0,0),UDim2.fromScale(1,1),23,C.cyan,Enum.Font.GothamMedium)
-    glyph.TextXAlignment=Enum.TextXAlignment.Center;glyph.ZIndex=5;glyph.Active=false
-    local title=label(face,"DisasterTitle","Disaster Detected!",UDim2.fromOffset(62,12),UDim2.new(1,-80,0,28),21,C.white,OPTION_FONT)
+    local neon=NeonFlow.new(face,"DisasterNeon",12,7.4,light)
+    local badge=frame(face,"DisasterBadge",UDim2.new(0,36,.5,0),UDim2.fromOffset(52,52),nil,1)
+    badge.AnchorPoint=Vector2.new(.5,.5);badge.Active=false;badge.ZIndex=4
+    local badgeScale=make("UIScale",badge,{Scale=.96})
+    local icons={}
+    for _,data in ipairs({{"detected","Success",C.cyan}, {"unavailable","Failure",C.pink}})do
+        local glow=imageLabel(badge,"Disaster"..data[2].."Glow",UDim2.fromScale(.5,.5),UDim2.fromScale(1.13,1.13))
+        glow.AnchorPoint=Vector2.new(.5,.5);glow.ImageColor3=data[3];glow.ZIndex=4;glow.Active=false
+        alpha(glow,"ImageTransparency",.86)
+        local wash=gradient(glow,{C.pink,C.orchid,C.cyan,C.chrome},20)
+        local image=imageLabel(badge,"Disaster"..data[2].."Icon",UDim2.fromScale(.5,.5),UDim2.fromScale(1,1))
+        image.AnchorPoint=Vector2.new(.5,.5);image.ImageColor3=Color3.new(1,1,1);image.ZIndex=5;image.Active=false
+        -- Native line fallback avoids the unsupported Unicode/tofu square in the old toast.
+        local fallback=frame(badge,"Disaster"..data[2].."Fallback",UDim2.fromScale(0,0),UDim2.fromScale(1,1),nil,1)
+        fallback.ZIndex=5;fallback.Active=false
+        local segments=data[1]=="detected" and {{12,26,21,34},{21,34,39,15}} or {{16,16,36,36},{36,16,16,36}}
+        for _,p in ipairs(segments)do
+            local dx,dy=p[3]-p[1],p[4]-p[2]
+            local line=frame(fallback,"Mark",UDim2.fromOffset((p[1]+p[3])/2,(p[2]+p[4])/2),
+                UDim2.fromOffset(math.sqrt(dx*dx+dy*dy),2.5),data[3],0)
+            line.AnchorPoint=Vector2.new(.5,.5);line.Rotation=math.deg(math.atan2(dy,dx));line.Active=false;corner(line,2)
+        end
+        icons[data[1]]={image=image,glow=glow,wash=wash,fallback=fallback,asset="Disaster"..data[2]}
+    end
+    local glints={}
+    for i=1,3 do
+        local glint=frame(badge,"DisasterIconGlint",UDim2.fromOffset(0,0),UDim2.fromOffset(i==1 and 3 or 2,i==1 and 3 or 2),
+            i==1 and C.chrome or i==2 and C.cyan or C.pink,1)
+        glint.AnchorPoint=Vector2.new(.5,.5);glint.Rotation=45;glint.Active=false;glint.ZIndex=6;corner(glint,1)
+        glints[i]=glint
+    end
+    local title=label(face,"DisasterTitle","Disaster Detected!",UDim2.fromOffset(72,11),UDim2.new(1,-86,0,23),19,C.white,OPTION_FONT)
     title.ZIndex=4;title.Active=false
-    local message=label(face,"DisasterMessage","",UDim2.fromOffset(62,43),UDim2.new(1,-80,0,48),20,C.silver,OPTION_FONT)
+    local message=label(face,"DisasterMessage","",UDim2.fromOffset(72,35),UDim2.new(1,-86,0,37),18,C.silver,OPTION_FONT)
     message.TextWrapped=true;message.TextTruncate=Enum.TextTruncate.None;message.ZIndex=4;message.Active=false
     message.TextScaled=true
-    make("UITextSizeConstraint",message,{MinTextSize=14,MaxTextSize=20})
-    local rail=frame(face,"DisasterTimerRail",UDim2.new(0,16,1,-10),UDim2.new(1,-32,0,2),C.steel,.77)
+    make("UITextSizeConstraint",message,{MinTextSize=14,MaxTextSize=18})
+    local rail=frame(face,"DisasterTimerRail",UDim2.new(0,14,1,-7),UDim2.new(1,-28,0,1),C.steel,.80)
     rail.Active=false;rail.ZIndex=4;corner(rail,2)
-    local bar=frame(rail,"DisasterTimer",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),.12)
-    bar.Active=false;corner(bar,2);gradient(bar,{C.violet,C.cyan,C.chrome},0)
+    local bar=frame(rail,"DisasterTimer",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),.16)
+    bar.Active=false;corner(bar,2);gradient(bar,{C.pink,C.violet,C.cyan},0)
     local glint=frame(face,"DisasterGlint",UDim2.new(.15,0,0,0),UDim2.new(.52,0,0,1),Color3.new(1,1,1),.28)
     glint.Active=false;glint.ZIndex=4;fadeGradient(gradient(glint,{C.deep,C.cyan,C.chrome,C.violet},0))
-    local self=setmetatable({host=host,progress=UI.disasterProgress,phase="hidden",halos=halos,
-        neon=neon,title=title,message=message,glyph=glyph,bar=bar,glint=glint},DisasterToast)
+    local self=setmetatable({host=host,progress=UI.disasterProgress,phase="hidden",halos=halos,icons=icons,
+        badgeScale=badgeScale,iconGlints=glints,neon=neon,title=title,message=message,bar=bar,glint=glint},DisasterToast)
     connect(self.progress.Changed,function()self:position();refreshAlpha()end)
-    self:resize()
+    self:resize();self:refreshIcons()
     UI.gui:SetAttribute("DisasterNotification","hidden");UI.gui:SetAttribute("DisasterNoticeCount",0)
+    UI.gui:SetAttribute("DisasterNoticeDuration",DISASTER_HOLD)
     return self
+end
+function DisasterToast:refreshIcons()
+    local selected=self.kind=="detected" and "detected" or "unavailable"
+    for key,art in pairs(self.icons)do
+        local ready=art.image.Image~="" and art.image.IsLoaded
+        art.image.Visible=key==selected and ready
+        art.glow.Visible=key==selected and ready
+        art.fallback.Visible=key==selected and not ready
+        if ready then UI.gui:SetAttribute("Asset"..art.asset,"ready")end
+    end
 end
 function DisasterToast:position()
     self.host.Position=UDim2.new(1,-16+(self.width+44)*(1-self.progress.Value),0,16)
+    self.badgeScale.Scale=.96+.04*self.progress.Value
 end
 function DisasterToast:resize()
-    self.width=math.max(200,math.min(358,UI.screen.AbsoluteSize.X-32))
-    self.host.Size=UDim2.fromOffset(self.width,110);self:position()
+    self.width=math.max(200,math.min(318,UI.screen.AbsoluteSize.X-32))
+    self.host.Size=UDim2.fromOffset(self.width,88);self:position()
 end
 function DisasterToast:show(kind,text)
     if not state.alive or state.target=="closed" then return end
     self.kind=kind;self.message.Text=text
     self.title.Text=kind=="detected" and "Disaster Detected!" or "Disaster Prediction"
-    self.glyph.Text=kind=="error" and "!" or kind=="waiting" and "…" or "✦"
-    self.glyph.TextColor3=kind=="error" and C.rose or C.cyan
-    self.host.Visible=true;self.phase="entering";self.holdAt=os.clock()+.36;self.endsAt=self.holdAt+3
+    self:refreshIcons()
+    self.host.Visible=true;self.phase="entering";self.holdAt=os.clock()+.36;self.endsAt=self.holdAt+DISASTER_HOLD;self.exitAt=nil
     self.bar.Size=UDim2.fromScale(1,1)
     UI.gui:SetAttribute("DisasterNoticeText",text);UI.gui:SetAttribute("DisasterNoticeKind",kind)
     UI.gui:SetAttribute("DisasterNoticeCount",UI.gui:GetAttribute("DisasterNoticeCount")+1)
@@ -1094,14 +1131,22 @@ function DisasterToast:update(now,time)
         self.phase="holding";UI.gui:SetAttribute("DisasterNotification","holding")
     end
     if self.phase=="holding" then
-        self.bar.Size=UDim2.fromScale(math.clamp((self.endsAt-now)/3,0,1),1)
+        self.bar.Size=UDim2.fromScale(math.clamp((self.endsAt-now)/DISASTER_HOLD,0,1),1)
         if now>=self.endsAt then self:dismiss(.32)end
     elseif self.phase=="exiting" and now>=self.exitAt then
         self.phase="hidden";self.host.Visible=false;UI.gui:SetAttribute("DisasterNotification","hidden");return
     end
-    self.neon:update(time,.15)
+    self.neon:update(time,.13)
     for i,wash in ipairs(self.halos)do wash.Offset=Vector2.new(math.sin(time*.55+i)*.32,0)end
     self.glint.Position=UDim2.new(.17+.17*math.sin(time*.65),0,0,0)
+    local art=self.icons[self.kind=="detected" and "detected" or "unavailable"]
+    art.wash.Offset=Vector2.new(math.sin(time*.85)*.28,0)
+    alpha(art.glow,"ImageTransparency",.86-.045*math.sin(time*1.8)^2)
+    for i,spark in ipairs(self.iconGlints)do
+        local phase=time*.35+i*2.1
+        spark.Position=UDim2.new(.5,math.cos(phase)*28,.5,math.sin(phase)*27)
+        alpha(spark,"BackgroundTransparency",1-(.5+.5*math.sin(time*1.7+i*2.3))^4*.68)
+    end
 end
 UI.disasterToast=DisasterToast.new()
 
@@ -3488,6 +3533,8 @@ end)
 -- The previous wordmark PNG remains in the repository but is no longer loaded.
 -- Custom artwork needs the executor's local asset API; failure never blocks the GUI.
 local ASSETS={
+    DisasterSuccess={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-success-v1.png",file="ReyznX-disaster-success-v1.png",bytes=1346483,images={UI.disasterToast.icons.detected.image,UI.disasterToast.icons.detected.glow}},
+    DisasterFailure={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-failure-v1.png",file="ReyznX-disaster-failure-v1.png",bytes=1491592,images={UI.disasterToast.icons.unavailable.image,UI.disasterToast.icons.unavailable.glow}},
     IconHome={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-home-v1.png",file="ReyznX-icon-home-v1.png",bytes=1933132,images=artworkImages.IconHome},
     IconMain={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-main-v1.png",file="ReyznX-icon-main-v1.png",bytes=2142879,images=artworkImages.IconMain},
     IconVisuals={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-visuals-v1.png",file="ReyznX-icon-visuals-v1.png",bytes=1628114,images=artworkImages.IconVisuals},
@@ -3591,6 +3638,7 @@ connect(RunService.Heartbeat,function(dt)
     UI.recovery.Visible=state.target~="closed" and state.finishAt==0 and offscreen(state.target=="minimized" and UI.launcher or UI.window)
     if p>=(state.assetPoll or 0) then
         state.assetPoll=p+.2
+        UI.disasterToast:refreshIcons()
         UI.avatarFallback.Visible=UI.avatar.Image=="" or not UI.avatar.IsLoaded
         UI.rFallback.Visible=UI.launcherImage.Image=="" or not UI.launcherImage.IsLoaded
         UI.recoveryFallback.Visible=UI.recoveryImage.Image=="" or not UI.recoveryImage.IsLoaded
