@@ -10,15 +10,15 @@ local player = Players.LocalPlayer
 if not player then return end
 local startedAt = os.clock()
 local playerGui = player:WaitForChild("PlayerGui")
-local previous = playerGui:FindFirstChild("ReyznX")
-if previous then previous:Destroy() end
--- Replace the old detector window when migrating to its integrated controls.
-local previousPrediction=playerGui:FindFirstChild("ReyznDisasterPrediction")
-if previousPrediction then previousPrediction:Destroy() end
+-- Retire every previous instance owned by this Hub, including notices that were
+-- still visible. FindFirstChild alone can leave a duplicate old GUI running.
+for _,previous in ipairs(playerGui:GetChildren())do
+    if previous.Name=="ReyznX" or previous.Name=="ReyznDisasterPrediction" then previous:Destroy() end
+end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "disaster-notice-icons-20261018"
+local BUILD = "disaster-icons-visible-20261018"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -1051,7 +1051,7 @@ function DisasterToast.new()
         image.AnchorPoint=Vector2.new(.5,.5);image.ImageColor3=Color3.new(1,1,1);image.ZIndex=5;image.Active=false
         -- Native line fallback avoids the unsupported Unicode/tofu square in the old toast.
         local fallback=frame(badge,"Disaster"..data[2].."Fallback",UDim2.fromScale(0,0),UDim2.fromScale(1,1),nil,1)
-        fallback.ZIndex=5;fallback.Active=false
+        fallback.ZIndex=3;fallback.Active=false
         local segments=data[1]=="detected" and {{12,26,21,34},{21,34,39,15}} or {{16,16,36,36},{36,16,16,36}}
         for _,p in ipairs(segments)do
             local dx,dy=p[3]-p[1],p[4]-p[2]
@@ -1086,14 +1086,19 @@ function DisasterToast.new()
     self:resize();self:refreshIcons()
     UI.gui:SetAttribute("DisasterNotification","hidden");UI.gui:SetAttribute("DisasterNoticeCount",0)
     UI.gui:SetAttribute("DisasterNoticeDuration",DISASTER_HOLD)
+    UI.gui:SetAttribute("DisasterNoticeLayout","compact-icons-v2")
     return self
 end
 function DisasterToast:refreshIcons()
     local selected=self.kind=="detected" and "detected" or "unavailable"
     for key,art in pairs(self.icons)do
-        local ready=art.image.Image~="" and art.image.IsLoaded
-        art.image.Visible=key==selected and ready
-        art.glow.Visible=key==selected and ready
+        local assigned=art.image.Image~=""
+        local ready=assigned and art.image.IsLoaded
+        -- PreloadAsync can cache hidden textures without uploading them for
+        -- rendering. Never make Visible depend on IsLoaded: that deadlocks
+        -- the first display on those clients. Keep the native mark underneath.
+        art.image.Visible=key==selected and assigned
+        art.glow.Visible=key==selected and assigned
         art.fallback.Visible=key==selected and not ready
         if ready then UI.gui:SetAttribute("Asset"..art.asset,"ready")end
     end
@@ -3533,8 +3538,8 @@ end)
 -- The previous wordmark PNG remains in the repository but is no longer loaded.
 -- Custom artwork needs the executor's local asset API; failure never blocks the GUI.
 local ASSETS={
-    DisasterSuccess={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-success-v1.png",file="ReyznX-disaster-success-v1.png",bytes=1346483,images={UI.disasterToast.icons.detected.image,UI.disasterToast.icons.detected.glow}},
-    DisasterFailure={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-failure-v1.png",file="ReyznX-disaster-failure-v1.png",bytes=1491592,images={UI.disasterToast.icons.unavailable.image,UI.disasterToast.icons.unavailable.glow}},
+    DisasterSuccess={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-success-v1.png",file="ReyznX-disaster-success-v1.png",bytes=1346483,refresh=true,images={UI.disasterToast.icons.detected.image,UI.disasterToast.icons.detected.glow}},
+    DisasterFailure={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/disaster-failure-v1.png",file="ReyznX-disaster-failure-v1.png",bytes=1491592,refresh=true,images={UI.disasterToast.icons.unavailable.image,UI.disasterToast.icons.unavailable.glow}},
     IconHome={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-home-v1.png",file="ReyznX-icon-home-v1.png",bytes=1933132,images=artworkImages.IconHome},
     IconMain={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-main-v1.png",file="ReyznX-icon-main-v1.png",bytes=2142879,images=artworkImages.IconMain},
     IconVisuals={url="https://raw.githubusercontent.com/hzReyzn/Ghislain/main/assets/reyzn-x/icon-visuals-v1.png",file="ReyznX-icon-visuals-v1.png",bytes=1628114,images=artworkImages.IconVisuals},
@@ -3572,7 +3577,11 @@ local function loadAsset(key,asset)
     if not uri then
         for attempt=1,2 do
             if not state.alive then return end
-            local ok,body=pcall(function() return game:HttpGet(asset.url) end)
+            local url=asset.url
+            -- New notice images must not reuse a cached 404 from before they
+            -- were published. Valid local PNGs are still reused without HTTP.
+            if asset.refresh then url..="?build="..BUILD.."&t="..tostring(os.time()).."&attempt="..attempt end
+            local ok,body=pcall(function() return game:HttpGet(url) end)
             if not state.alive then return end
             if ok and validArtwork(body,asset) then
                 local wrote=pcall(writefile,asset.file,body)

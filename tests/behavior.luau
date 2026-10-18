@@ -79,6 +79,46 @@ return function(source)
         assert(gui.Parent==nil and #w.requests==14 and #w.writes==14,'valid cache was downloaded again')
         close(w,again)
     end)
+    test('disaster icons render when preload only caches hidden textures',function()
+        local w=setup();w.preloadCacheOnly=true
+        local gui=w.run(source);w.step(30)
+        local success,failure=find(gui,'DisasterSuccessIcon'),find(gui,'DisasterFailureIcon')
+        assert(success.Image~='' and failure.Image~='')
+        assert(not success.IsLoaded and not failure.IsLoaded,'notice is initially hidden')
+        click(gui,'DisasterPredictionManual');w.step(30)
+        assert(failure.Visible and failure.IsLoaded,'assigned failure icon must reach the renderer')
+        assert(not find(gui,'DisasterFailureFallback').Visible)
+        local c=w.character();local tag=w.env.Instance.new('StringValue')
+        tag.Name='SurvivalTag';tag.Value='Tsunami';tag.Parent=c
+        click(gui,'DisasterPrediction');w.step(30)
+        assert(success.Visible and success.IsLoaded,'success icon must load on its first notice')
+        assert(not failure.Visible and not find(gui,'DisasterSuccessFallback').Visible)
+        assert(gui:GetAttribute('DisasterNoticeDuration')==5)
+        close(w,gui)
+    end)
+    test('notice artwork retries bypass cached missing responses and then reuses valid local files',function()
+        local w=setup();local get=w.env.game.HttpGet;local attempts={}
+        w.env.game.HttpGet=function(self,url)
+            if url:find('/disaster-',1,true)then
+                assert(url:find('?build=disaster-icons-visible-20261018',1,true),'missing image cache revision')
+                local base=url:match('^[^?]+');attempts[base]=(attempts[base] or 0)+1
+                if attempts[base]==1 then
+                    w.requests[#w.requests+1]=url
+                    return '<html>cached missing asset</html>'
+                end
+                assert(url:find('&attempt=2',1,true),'retry must use a distinct URL')
+            end
+            return get(self,url)
+        end
+        local gui=w.run(source);w.step(100)
+        for _,name in ipairs({'disaster-success-v1.png','disaster-failure-v1.png'})do
+            assert(attempts[URL..name]==2)
+            assert(w.files['ReyznX-'..name]==artwork[name])
+        end
+        local count=#w.requests;local again=w.run(source);w.step(30)
+        assert(gui.Parent==nil and #w.requests==count,'valid cached images must not redownload')
+        close(w,again)
+    end)
     test('only selected section opens to the right; dock works on its own',function()
         local w,gui=launch();w.step(30)
         local dock=find(gui,'Dock');local dockX=dock.AbsolutePosition.X

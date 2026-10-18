@@ -66,6 +66,22 @@ return function(source)
         assert(cleaned);equal(w.pg:FindFirstChild('ReyznDisasterPrediction'),nil)
         equal(g:GetAttribute('DisasterPredictionEnabled'),false);dispose(w,g)
     end)
+    test('rerun removes every duplicate owned notice without touching another GUI',function()
+        local retired=0;local originals={};local other
+        local w,g=launch(function(w)
+            for _,name in ipairs({'ReyznX','ReyznX','ReyznDisasterPrediction','ReyznDisasterPrediction'})do
+                local old=make(w,'ScreenGui',name,w.pg);originals[#originals+1]=old
+                make(w,'Frame','DisasterNotification',old)
+                old.Destroying:Connect(function()retired+=1 end)
+            end
+            other=make(w,'ScreenGui','UnrelatedGui',w.pg)
+        end)
+        equal(retired,4);assert(other.Parent==w.pg)
+        for _,old in ipairs(originals)do equal(old.Parent,nil)end
+        local count=0;for _,child in ipairs(w.pg:GetChildren())do if child.Name=='ReyznX'then count+=1 end end
+        equal(count,1);equal(g:GetAttribute('DisasterNoticeLayout'),'compact-icons-v2')
+        dispose(w,g)
+    end)
     test('manual works with automatic OFF and releases temporary observers',function()
         local w,g=launch(function(w)tag(w,'Tornado')end)
         click(g,'DisasterPredictionManual');w.step(10)

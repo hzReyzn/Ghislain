@@ -247,6 +247,9 @@ local function newWorld()
     services.ContentProvider={PreloadAsync=function(_,items)
         if W.preloadDelay then env.task.wait(W.preloadDelay) end
         if W.assetRenderFailure then error('asset rendering unavailable') end
+        -- Downloading a hidden texture into cache need not make IsLoaded true;
+        -- the normal renderer path below resolves it only after it is visible.
+        if W.preloadCacheOnly then return end
         for _,item in ipairs(items) do item.IsLoaded=true end
     end};services.SoundService=env.Instance.new('SoundService')
     env.workspace=env.Instance.new('Workspace');env.workspace.Name='Workspace';env.workspace.Gravity=196.2;env.workspace.FallenPartsDestroyHeight=-500
