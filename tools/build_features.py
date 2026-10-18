@@ -7,7 +7,9 @@ source=target.read_text()
 blocks=[]
 for path,name in [('runtime/CharacterFeature.luau','createCharacterFeature'),
                   ('features/WalkOnWater.luau','createWalkOnWater'),
-                  ('features/Antifling.luau','createAntifling')]:
+                  ('features/Antifling.luau','createAntifling'),
+                  ('runtime/DisasterDetection.luau','DisasterDetection'),
+                  ('features/DisasterPrediction.luau','createDisasterPrediction')]:
     blocks.append('local '+name+' = (function()\n'+(ROOT/path).read_text()+'end)()\n')
 start='-- BEGIN CHARACTER FEATURES\n'
 end='-- END CHARACTER FEATURES\n'

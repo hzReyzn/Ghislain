@@ -12,10 +12,13 @@ local startedAt = os.clock()
 local playerGui = player:WaitForChild("PlayerGui")
 local previous = playerGui:FindFirstChild("ReyznX")
 if previous then previous:Destroy() end
+-- Replace the old detector window when migrating to its integrated controls.
+local previousPrediction=playerGui:FindFirstChild("ReyznDisasterPrediction")
+if previousPrediction then previousPrediction:Destroy() end
 
 -- Public version changes ONLY at the owner's explicit request.
 local VERSION = "1.0"
-local BUILD = "scripts-executables-20261017"
+local BUILD = "disaster-prediction-20261017"
 -- Roblox Creator Store: Rajdhani, published by Roblox. Use FontFace, not
 -- an invented Enum.Font entry. The brand and credit retain their own fonts.
 local OPTION_FONT = Font.new("rbxassetid://12187375422",Enum.FontWeight.SemiBold,Enum.FontStyle.Normal)
@@ -37,7 +40,7 @@ local state = {alive=true, target="open", page="Home", paneOpen=true,
 local UI, connections, threads, tweens = {}, {}, {}, {}
 local features = {}
 local scopes, alphaEntries, alphaLookup = {}, {}, {}
-local factors = {window=0, pane=0, page=0, launcher=0, notification=0, fixed=1}
+local factors = {window=0, pane=0, page=0, launcher=0, notification=0, disaster=0, fixed=1}
 
 local function connect(signal, callback)
     local c = signal:Connect(function(...) if state.alive then callback(...) end end)
@@ -69,6 +72,7 @@ local function refreshAlpha()
     factors.page=factors.pane*UI.pageFade.Value
     factors.launcher=UI.launcherFade.Value
     factors.notification=UI.toastProgress and UI.toastProgress.Value or 0
+    factors.disaster=UI.disasterProgress and UI.disasterProgress.Value or 0
     for _,entry in ipairs(alphaEntries) do
         entry.object[entry.property]=1-(1-entry.base)*(factors[entry.scope] or 1)
     end
@@ -1010,6 +1014,96 @@ function LoadToast:update(now,time)
     alpha(self.badgeEdge,"Transparency",.42+.08*math.sin(time*1.2)^2)
 end
 UI.loadToast=LoadToast.new()
+
+-- Reused top-right notice. It belongs to the screen, not the moving Hub.
+-- One surface, one fade clock, no allocation or growing queue per notification.
+local DisasterToast={};DisasterToast.__index=DisasterToast
+function DisasterToast.new()
+    UI.disasterProgress=make("NumberValue",UI.gui,{Name="DisasterOpacity",Value=0})
+    local host=frame(UI.screen,"DisasterNotification",UDim2.fromOffset(0,16),UDim2.fromOffset(358,110),nil,1,"disaster")
+    host.AnchorPoint=Vector2.new(1,0);host.ZIndex=20;host.Active=false;host.Visible=false
+    local halos={}
+    for i=1,2 do
+        local halo=frame(host,"DisasterHalo",UDim2.fromOffset(-i*2,-i*2),UDim2.new(1,i*4,1,i*4),nil,1)
+        halo.ZIndex=0;halo.Active=false;corner(halo,14+i*2)
+        local edge=stroke(halo,Color3.new(1,1,1),i==1 and .72 or .90,i==1 and 2 or 3)
+        local wash=gradient(edge,{C.deep,C.violet,C.cyan,C.ice,C.rose,C.deep},24)
+        fadeGradient(wash);halos[i]=wash
+    end
+    local face=frame(host,"DisasterFace",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1))
+    face.Active=false;face.ZIndex=2;corner(face,14)
+    gradient(face,{Color3.fromRGB(23,31,45),C.black,Color3.fromRGB(26,17,38)},24)
+    local edge=stroke(face,Color3.new(1,1,1),.28,1)
+    local light=gradient(edge,{C.deep,C.violet,C.cyan,C.chrome,C.rose},22)
+    local neon=NeonFlow.new(face,"DisasterNeon",13,7.4,light)
+    local badge=frame(face,"DisasterBadge",UDim2.fromOffset(16,18),UDim2.fromOffset(34,34),Color3.new(1,1,1))
+    badge.Active=false;badge.ZIndex=4;corner(badge,11)
+    gradient(badge,{Color3.fromRGB(27,47,61),Color3.fromRGB(26,18,39)},32)
+    stroke(badge,C.cyan,.50,1)
+    local glyph=label(badge,"DisasterGlyph","✦",UDim2.fromScale(0,0),UDim2.fromScale(1,1),23,C.cyan,Enum.Font.GothamMedium)
+    glyph.TextXAlignment=Enum.TextXAlignment.Center;glyph.ZIndex=5;glyph.Active=false
+    local title=label(face,"DisasterTitle","Disaster Detected!",UDim2.fromOffset(62,12),UDim2.new(1,-80,0,28),21,C.white,OPTION_FONT)
+    title.ZIndex=4;title.Active=false
+    local message=label(face,"DisasterMessage","",UDim2.fromOffset(62,43),UDim2.new(1,-80,0,48),20,C.silver,OPTION_FONT)
+    message.TextWrapped=true;message.TextTruncate=Enum.TextTruncate.None;message.ZIndex=4;message.Active=false
+    message.TextScaled=true
+    make("UITextSizeConstraint",message,{MinTextSize=14,MaxTextSize=20})
+    local rail=frame(face,"DisasterTimerRail",UDim2.new(0,16,1,-10),UDim2.new(1,-32,0,2),C.steel,.77)
+    rail.Active=false;rail.ZIndex=4;corner(rail,2)
+    local bar=frame(rail,"DisasterTimer",UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1),.12)
+    bar.Active=false;corner(bar,2);gradient(bar,{C.violet,C.cyan,C.chrome},0)
+    local glint=frame(face,"DisasterGlint",UDim2.new(.15,0,0,0),UDim2.new(.52,0,0,1),Color3.new(1,1,1),.28)
+    glint.Active=false;glint.ZIndex=4;fadeGradient(gradient(glint,{C.deep,C.cyan,C.chrome,C.violet},0))
+    local self=setmetatable({host=host,progress=UI.disasterProgress,phase="hidden",halos=halos,
+        neon=neon,title=title,message=message,glyph=glyph,bar=bar,glint=glint},DisasterToast)
+    connect(self.progress.Changed,function()self:position();refreshAlpha()end)
+    self:resize()
+    UI.gui:SetAttribute("DisasterNotification","hidden");UI.gui:SetAttribute("DisasterNoticeCount",0)
+    return self
+end
+function DisasterToast:position()
+    self.host.Position=UDim2.new(1,-16+(self.width+44)*(1-self.progress.Value),0,16)
+end
+function DisasterToast:resize()
+    self.width=math.max(200,math.min(358,UI.screen.AbsoluteSize.X-32))
+    self.host.Size=UDim2.fromOffset(self.width,110);self:position()
+end
+function DisasterToast:show(kind,text)
+    if not state.alive or state.target=="closed" then return end
+    self.kind=kind;self.message.Text=text
+    self.title.Text=kind=="detected" and "Disaster Detected!" or "Disaster Prediction"
+    self.glyph.Text=kind=="error" and "!" or kind=="waiting" and "…" or "✦"
+    self.glyph.TextColor3=kind=="error" and C.rose or C.cyan
+    self.host.Visible=true;self.phase="entering";self.holdAt=os.clock()+.36;self.endsAt=self.holdAt+3
+    self.bar.Size=UDim2.fromScale(1,1)
+    UI.gui:SetAttribute("DisasterNoticeText",text);UI.gui:SetAttribute("DisasterNoticeKind",kind)
+    UI.gui:SetAttribute("DisasterNoticeCount",UI.gui:GetAttribute("DisasterNoticeCount")+1)
+    UI.gui:SetAttribute("DisasterNotification","entering")
+    tween(self.progress,.36,{Value=1})
+end
+function DisasterToast:dismiss(seconds)
+    if self.phase=="hidden" then return end
+    seconds=seconds or .28
+    self.phase="exiting";self.exitAt=os.clock()+seconds
+    UI.gui:SetAttribute("DisasterNotification","exiting")
+    tween(self.progress,seconds,{Value=0})
+end
+function DisasterToast:update(now,time)
+    if self.phase=="hidden" then return end
+    if self.phase=="entering" and now>=self.holdAt then
+        self.phase="holding";UI.gui:SetAttribute("DisasterNotification","holding")
+    end
+    if self.phase=="holding" then
+        self.bar.Size=UDim2.fromScale(math.clamp((self.endsAt-now)/3,0,1),1)
+        if now>=self.endsAt then self:dismiss(.32)end
+    elseif self.phase=="exiting" and now>=self.exitAt then
+        self.phase="hidden";self.host.Visible=false;UI.gui:SetAttribute("DisasterNotification","hidden");return
+    end
+    self.neon:update(time,.15)
+    for i,wash in ipairs(self.halos)do wash.Offset=Vector2.new(math.sin(time*.55+i)*.32,0)end
+    self.glint.Position=UDim2.new(.17+.17*math.sin(time*.65),0,0,0)
+end
+UI.disasterToast=DisasterToast.new()
 
 -- Compact, reusable feature control. Its hit target never scales; only the
 -- inner face compresses. OFF has no colored glow, flash or running light sweep.
@@ -2529,6 +2623,452 @@ return function(context)
     })
 end
 end)()
+local DisasterDetection = (function()
+-- Pure evidence model. A list of available disaster modules is never evidence.
+local Detection={}
+local definitions={
+    {"Acidrain","Acid Rain"},{"Avalanche","Avalanche"},{"Blizzard","Blizzard"},
+    {"Earthquake","Earthquake"},{"Fire","Fire"},{"Flood","Flash Flood"},
+    {"Lightning","Thunderstorm"},{"Meteor","Meteor Shower"},{"Sandstorm","Sandstorm"},
+    {"Tornado","Tornado"},{"Tsunami","Tsunami"},{"Virus","Deadly Virus"},{"Volcano","Volcanic Eruption"},
+}
+local aliases={}
+function Detection.normalize(value) return type(value)=="string" and value:lower():gsub("[^%w]","") or "" end
+for _,item in ipairs(definitions) do aliases[Detection.normalize(item[1])]=item[2];aliases[Detection.normalize(item[2])]=item[2] end
+Detection.valueKeys={survivaltag=true,disaster=true,disasters=true,currentdisaster=true,currentdisasters=true,
+    selecteddisaster=true,selecteddisasters=true,nextdisaster=true,nextdisasters=true,
+    activedisaster=true,activedisasters=true,disastertype=true,disastername=true}
+Detection.roundKeys={roundid=true,roundnumber=true,roundindex=true}
+Detection.phaseKeys={roundstate=true,roundphase=true,gamestate=true,gamephase=true}
+Detection.clearPhases={intermission=true,waiting=true,roundend=true,roundended=true,ended=true,lobby=true}
+
+function Detection.parse(value)
+    local found,visited={},{}
+    local budget=64
+    local function visit(v,depth)
+        if budget<=0 or depth>4 then return end
+        budget-=1
+        if type(v)=="string" then
+            if #v>512 then return end
+            local exact=aliases[Detection.normalize(v)]
+            if exact then found[exact]=true;return end
+            -- Structured lists only. No substring guesses from prose or asset paths.
+            local list=v:gsub("%s+[Aa][Nn][Dd]%s+","|")
+            local pending={}
+            for token in list:gmatch("[^,;|+&\n]+") do
+                local name=aliases[Detection.normalize(token)]
+                if not name then return end
+                pending[name]=true
+            end
+            for name in pairs(pending) do found[name]=true end
+        elseif type(v)=="table" and not visited[v] then
+            visited[v]=true
+            for key,item in pairs(v) do
+                if budget<=0 then break end
+                budget-=1
+                if type(key)=="number" or Detection.valueKeys[Detection.normalize(key)] then visit(item,depth+1) end
+            end
+        end
+    end
+    visit(value,0)
+    local result={}
+    for _,item in ipairs(definitions) do if found[item[2]] then result[#result+1]=item[2] end end
+    return result
+end
+
+function Detection.warning(text)
+    if type(text)~="string" or #text>2048 then return {} end
+    local cleaned=text:gsub("<[^>]*>",""):lower():gsub("^%s+","")
+    cleaned=cleaned:gsub("^disaster%s+warning[%s:!%-]*","")
+    for _,item in ipairs(definitions) do
+        for _,alias in ipairs({item[2]:lower(),item[1]:lower()}) do
+            if cleaned:sub(1,#alias)==alias then
+                local nextChar=cleaned:sub(#alias+1,#alias+1)
+                if nextChar=="" or nextChar:match("[%s%p]") then return {item[2]} end
+            end
+        end
+    end
+    return {}
+end
+
+function Detection.new(clock,changed,reset)
+    local self={records={},order={},round=0,alive=true}
+    function self:observe(names,source,kind,initial)
+        if not self.alive then return end
+        local now=clock()
+        for _,name in ipairs(names) do
+            local record=self.records[name]
+            if not record then
+                record={name=name,source=source,kind=kind,first=now,
+                    eligible=not initial and kind~="warning",initial=initial==true}
+                if kind=="warning" then record.warningAt=now end
+                self.records[name]=record;self.order[#self.order+1]=name
+                changed(record,"detected")
+            elseif kind=="warning" and not record.warningAt then
+                record.warningAt=now
+                -- Below 250ms, polling/render order is too close to claim a lead.
+                if record.eligible and now-record.first>=.25 then record.lead=now-record.first end
+                changed(record,"timing")
+            end
+        end
+    end
+    function self:reset(reason)
+        if not self.alive then return end
+        self.round+=1;table.clear(self.records);table.clear(self.order)
+        if reset then reset(reason) end
+    end
+    function self:summary()
+        return table.concat(self.order," · ")
+    end
+    function self:destroy() self.alive=false;table.clear(self.records);table.clear(self.order) end
+    return self
+end
+return Detection
+end)()
+local createDisasterPrediction = (function()
+-- Headless adaptation of the working standalone detector. No physics, GUI,
+-- network requests or shared globals. Each activation owns its observers.
+return function(ctx)
+    local player,playerGui,storage,rs=ctx.player,ctx.playerGui,ctx.storage,ctx.runService
+    local Detection=ctx.detection
+    local self={enabled=false,destroyed=false,supported=game.PlaceId==189707,manualReadyAt=0,manualBusy=false}
+    local session
+    local limits={watchers=192,remotes=48,labels=48,candidates=192}
+    local normalize=Detection.normalize
+    local membershipKeys={inround=true,inactiveround=true,participatinginround=true,playinground=true}
+    local activePhases={active=true,playing=true,surviving=true,disaster=true,inprogress=true}
+    local function disconnect(list)
+        for _,c in ipairs(list)do c:Disconnect()end
+        table.clear(list)
+    end
+    local function staticContainer(o)
+        local node=o
+        while node and node~=workspace and node~=storage and node~=player do
+            local name=normalize(node.Name)
+            if node:IsA('LuaSourceContainer') or name=='labhandler' or name=='templates' or name=='assets'
+                or name=='catalog' or name=='modules' or name=='configuration' or name=='config' then return true end
+            node=node.Parent
+        end
+        return false
+    end
+    local function excluded(o)
+        return o==ctx.gui or o:IsDescendantOf(ctx.gui) or staticContainer(o)
+    end
+    local function localOwner(o)
+        return o==player or o==player.Character or o.Parent==player or o.Parent==player.Character
+    end
+    local function liveCharacter()
+        local c=player.Character
+        if not c or not c:IsDescendantOf(workspace) then return nil end
+        local h=c:FindFirstChildOfClass('Humanoid')
+        local root=c:FindFirstChild('HumanoidRootPart')
+        if not h or h.Health<=0 or not root or not root:IsA('BasePart') then return nil end
+        if root.Position.Y<=workspace.FallenPartsDestroyHeight+4 then return nil end
+        return c
+    end
+    local function isInRound(s)
+        local c=liveCharacter()
+        if not c or s.roundOpen==false or s.leftRound then return false end
+        local positive=false
+        -- Explicit local participation takes priority over global announcements.
+        for _,o in ipairs({player,c}) do
+            for key,value in pairs(o:GetAttributes()) do
+                if membershipKeys[normalize(key)] then
+                    if value==false then return false end
+                    if value==true then positive=true end
+                end
+            end
+            for _,child in ipairs(o:GetChildren()) do
+                if membershipKeys[normalize(child.Name)] and child:IsA('BoolValue') then
+                    if not child.Value then return false end
+                    positive=true
+                end
+            end
+        end
+        local tag=c:FindFirstChild('SurvivalTag')
+        if tag then
+            if tag:IsA('StringValue') and #Detection.parse(tag.Value)>0 then positive=true
+            elseif tag:IsA('BoolValue') and tag.Value then positive=true end
+        end
+        return positive
+    end
+    local function stop()
+        local s=session;if not s then return end
+        session=nil;s.alive=false;s.model:destroy();disconnect(s.links);disconnect(s.characterLinks)
+        for _,entry in pairs(s.watchers)do disconnect(entry.links)end
+        for _,bucket in pairs(s.candidates)do disconnect(bucket)end
+        if s.scan and coroutine.status(s.scan)~='dead' and s.scan~=coroutine.running() then pcall(task.cancel,s.scan)end
+        table.clear(s.watchers);table.clear(s.candidates);table.clear(s.labels);table.clear(s.roundValues)
+        self.manualBusy=false
+    end
+    local function notice(kind,text)
+        if not self.destroyed then ctx.notify(kind,text) end
+    end
+    local function manualResult(s)
+        if session~=s or not s.alive or not s.ready or not self.manualBusy then return end
+        self.manualBusy=false
+        local kind,text='error','Error, You are not in an active round'
+        if isInRound(s) then
+            local c=player.Character
+            local tag=c and c:FindFirstChild('SurvivalTag')
+            local current=tag and tag:IsA('StringValue') and Detection.parse(tag.Value) or {}
+            -- The current character tag supersedes an older/global cache.
+            text=#current>0 and table.concat(current,' · ') or s.model:summary()
+            kind=text~='' and 'detected' or 'waiting'
+            if text=='' then text='Disaster data is not available yet' end
+        end
+        s.pending=false
+        if not self.enabled then stop()end
+        notice(kind,text)
+    end
+    local function start()
+        if session then return session end
+        local s={alive=true,links={},characterLinks={},watchers={},candidates={},labels={},roundValues={},
+            counts={watchers=0,remotes=0,labels=0,candidates=0},pending=false,ready=false,roundOpen=nil,leftRound=false}
+        session=s
+        local function valid()return s.alive and session==s and not self.destroyed end
+        local function connect(signal,fn,bucket)
+            local c=signal:Connect(function(...)if valid()then fn(...)end end)
+            local list=bucket or s.links;list[#list+1]=c;return c
+        end
+        s.model=Detection.new(os.clock,function(_,kind)
+            if kind=='detected' then s.pending=true end
+        end,function()
+            s.pending=false
+            if self.enabled and ctx.dismiss then ctx.dismiss()end
+        end)
+        local function reset(reason)
+            s.model:reset(reason);s.pending=false
+        end
+        local function field(o,key,value,initial)
+            local n=normalize(key)
+            if Detection.valueKeys[n] then
+                if n=='survivaltag' and o.Parent~=player.Character and o~=player.Character then return end
+                local names=Detection.parse(value)
+                if #names>0 then
+                    if n=='survivaltag' then s.leftRound=false end
+                    if s.roundOpen~=false then s.model:observe(names,o:GetFullName()..'.'..key,'state',initial)end
+                elseif n=='survivaltag' and value=='' and not initial then
+                    s.leftRound=true;reset('SurvivalTag cleared')
+                end
+            elseif Detection.roundKeys[n] then
+                s.roundValues[o]=s.roundValues[o] or {}
+                local old=s.roundValues[o][key];s.roundValues[o][key]=value
+                if not initial and old~=nil and old~=value then
+                    s.roundOpen=nil;s.leftRound=true;reset('Round changed')
+                end
+            elseif Detection.phaseKeys[n] then
+                local phase=normalize(value)
+                if Detection.clearPhases[phase] then
+                    s.roundOpen=false;s.leftRound=true;reset('Round ended')
+                elseif activePhases[phase] then s.roundOpen=true;s.leftRound=false end
+            elseif membershipKeys[n] and localOwner(o) then
+                if value==false then s.leftRound=true;reset('Player left round')
+                elseif value==true then s.leftRound=false end
+            end
+        end
+        local function remove(o)
+            local entry=s.watchers[o]
+            if entry then
+                disconnect(entry.links);s.watchers[o]=nil;s.counts.watchers-=1
+                if entry.remote then s.counts.remotes-=1 end
+                s.roundValues[o]=nil
+            end
+            if s.labels[o] then s.labels[o]=nil;s.counts.labels-=1 end
+            if s.candidates[o] then disconnect(s.candidates[o]);s.candidates[o]=nil;s.counts.candidates-=1 end
+        end
+        local containers={round=true,roundstate=true,rounddata=true,gamestate=true,disasterstate=true,disasterdata=true,activedisasters=true}
+        local function watch(o,initial)
+            if not valid() or s.watchers[o] or excluded(o) then return end
+            local n=normalize(o.Name)
+            local inState=o==workspace or o==storage or o:IsDescendantOf(storage) or o:IsDescendantOf(workspace)
+            local scalar=(o:IsA('StringValue') or o:IsA('IntValue') or o:IsA('NumberValue'))
+                and (Detection.valueKeys[n] or Detection.roundKeys[n] or Detection.phaseKeys[n])
+            if n=='survivaltag' and o.Parent~=player.Character then scalar=false end
+            local membership=membershipKeys[n] and localOwner(o) and o:IsA('BoolValue')
+            local remote=inState and (o:IsA('RemoteEvent') or o:IsA('UnreliableRemoteEvent'))
+                and (n:find('disaster',1,true) or n=='roundstate' or n=='roundchanged' or n=='roundended')
+            local attrs=o==workspace or o==storage or o==player or o==player.Character or containers[n]
+            if not ((inState and scalar) or membership or remote or attrs) then return end
+            if s.counts.watchers>=limits.watchers or (remote and s.counts.remotes>=limits.remotes) then return end
+            local entry={links={},remote=remote};s.watchers[o]=entry;s.counts.watchers+=1
+            connect(o.Destroying,function()remove(o)end,entry.links)
+            if scalar or membership then
+                connect(o:GetPropertyChangedSignal('Value'),function()
+                    if o.Parent then field(o,o.Name,o.Value,false)end
+                end,entry.links)
+                field(o,o.Name,o.Value,initial)
+            end
+            if attrs then
+                connect(o.AttributeChanged,function(key)field(o,key,o:GetAttribute(key),false)end,entry.links)
+                -- Apply phase/membership first: stale values in an intermission
+                -- must not become new alerts because table iteration is unordered.
+                local attributes=o:GetAttributes()
+                for key,value in pairs(attributes)do if not Detection.valueKeys[normalize(key)]then field(o,key,value,initial)end end
+                for key,value in pairs(attributes)do if Detection.valueKeys[normalize(key)]then field(o,key,value,initial)end end
+            end
+            if remote then
+                s.counts.remotes+=1
+                connect(o.OnClientEvent,function(...)
+                    local args=table.pack(...)
+                    if n=='roundended' then s.roundOpen=false;s.leftRound=true;reset('Round ended');return end
+                    if n=='disasterended' or n=='disasterend' or n=='enddisaster' or n=='stopdisaster' or n=='disasterstop' then return end
+                    for i=1,args.n do
+                        local value=args[i]
+                        local phase=normalize(type(value)=='table' and (value.Phase or value.phase or value.State or value.state or value.Action or value.action) or value)
+                        if Detection.clearPhases[phase] or phase=='stop' or phase=='end' or phase=='cancelled' then
+                            if n=='roundstate' or n=='roundchanged' then s.roundOpen=false;s.leftRound=true;reset('Round ended')end
+                            return
+                        elseif activePhases[phase] and (n=='roundstate' or n=='roundchanged') then s.roundOpen=true;s.leftRound=false end
+                    end
+                    local names=Detection.parse(args)
+                    if #names>0 and s.roundOpen~=false then s.model:observe(names,o:GetFullName(),'event',false)end
+                end,entry.links)
+            end
+        end
+        local function warningContext(o)
+            if o:IsA('Message')then return true end
+            if (not o:IsA('TextLabel') and not o:IsA('TextButton')) or not o:IsDescendantOf(playerGui) or excluded(o) then return false end
+            local node=o;local matched=false
+            while node and node~=playerGui do
+                local n=normalize(node.Name)
+                if n:find('chat',1,true) or n=='reyzndisasterprediction' then return false end
+                if n:find('disasterwarning',1,true) or n=='disasteralert' then matched=true end
+                node=node.Parent
+            end
+            return matched or o.Text:lower():find('disaster warning',1,true)~=nil
+        end
+        local function indexWarning(o)
+            if s.labels[o] or s.counts.labels>=limits.labels or not warningContext(o)then return end
+            s.labels[o]={last=''};s.counts.labels+=1
+        end
+        local function watchWarning(o)
+            indexWarning(o)
+            if s.candidates[o] or s.counts.candidates>=limits.candidates or excluded(o) or not o:IsDescendantOf(playerGui)
+                or (not o:IsA('TextLabel') and not o:IsA('TextButton'))then return end
+            local node=o
+            while node and node~=playerGui do
+                if normalize(node.Name):find('chat',1,true) then return end
+                node=node.Parent
+            end
+            local bucket={};s.candidates[o]=bucket;s.counts.candidates+=1
+            connect(o:GetPropertyChangedSignal('Text'),function()indexWarning(o)end,bucket)
+            connect(o.Destroying,function()remove(o)end,bucket)
+        end
+        local function visible(o)
+            if not o.Parent then return false end
+            if (o:IsA('TextLabel') or o:IsA('TextButton')) and o.TextTransparency>=.98 then return false end
+            local node=o
+            while node do
+                if node:IsA('GuiObject') and not node.Visible then return false end
+                if node:IsA('ScreenGui') and not node.Enabled then return false end
+                if node:IsA('CanvasGroup') and node.GroupTransparency>=.98 then return false end
+                node=node.Parent
+            end
+            return true
+        end
+        local function pollWarnings()
+            for o,entry in pairs(s.labels)do
+                if not o.Parent then remove(o)
+                elseif visible(o)then
+                    local names=Detection.warning(o.Text);local signature=table.concat(names,'|')
+                    if signature~='' and signature~=entry.last and s.roundOpen~=false then s.model:observe(names,o:GetFullName(),'warning',false)end
+                    entry.last=signature
+                else entry.last='' end
+            end
+        end
+        local function inspect(o,initial)watch(o,initial);watchWarning(o)end
+        local structure=workspace:FindFirstChild('Structure')
+        connect(workspace.ChildAdded,function(o)
+            if o.Name=='Structure' and o~=structure then
+                structure=o;s.roundOpen=nil;s.leftRound=false;reset('New Structure')
+            end
+        end)
+        connect(workspace.ChildRemoved,function(o)
+            if o==structure then structure=nil;s.roundOpen=false;s.leftRound=true;reset('Structure removed')end
+        end)
+        for _,root in ipairs({workspace,storage,playerGui})do
+            connect(root.DescendantAdded,function(o)inspect(o,false)end)
+            connect(root.DescendantRemoving,function(o)
+                if o.Parent==player.Character and o.Name=='SurvivalTag' then s.leftRound=true;reset('SurvivalTag removed')end
+                remove(o)
+            end)
+        end
+        connect(player.ChildAdded,function(o)watch(o,false)end)
+        connect(player.ChildRemoved,remove)
+        local currentCharacter
+        local function bindCharacter(c,initial)
+            disconnect(s.characterLinks)
+            if currentCharacter then
+                for o in pairs(s.watchers)do if o==currentCharacter or o:IsDescendantOf(currentCharacter)then remove(o)end end
+                reset('Character replaced');s.leftRound=true
+            end
+            currentCharacter=c
+            if not c then return end
+            local hum
+            local function watchHumanoid(o)
+                if o:IsA('Humanoid') and o~=hum then
+                    hum=o
+                    connect(o.Died,function()s.leftRound=true;reset('Character died')end,s.characterLinks)
+                end
+            end
+            connect(c.ChildAdded,watchHumanoid,s.characterLinks)
+            watch(c,initial)
+            for _,o in ipairs(c:GetChildren())do inspect(o,initial);watchHumanoid(o)end
+        end
+        connect(player.CharacterAdded,function(c)bindCharacter(c,true)end)
+        connect(player.CharacterRemoving,function(c)if currentCharacter==c then bindCharacter(nil,true)end end)
+        -- Separate clock from all visual effects: minimized/off-screen Hub still listens.
+        local accumulator=0
+        connect(rs.Heartbeat,function(dt)
+            accumulator+=dt;if accumulator<.1 then return end;accumulator=0
+            pollWarnings()
+            if s.ready and s.pending and self.enabled and not self.manualBusy then
+                s.pending=false;notice('detected',s.model:summary())
+            end
+            manualResult(s)
+        end)
+        for _,o in ipairs(playerGui:GetDescendants())do watchWarning(o)end
+        for _,o in ipairs(workspace:GetChildren())do watchWarning(o)end
+        watch(workspace,true);watch(storage,true);watch(player,true)
+        for _,o in ipairs(player:GetChildren())do watch(o,true)end
+        bindCharacter(player.Character,true);pollWarnings()
+        s.scan=task.defer(function()
+            for _,root in ipairs({storage,workspace})do
+                for i,o in ipairs(root:GetDescendants())do
+                    if not valid()then return end
+                    if o:IsDescendantOf(root)then inspect(o,true)end
+                    if i%256==0 then task.wait()end
+                end
+            end
+            if valid()then s.ready=true;manualResult(s)end
+        end)
+        return s
+    end
+    function self:setEnabled(enabled)
+        if self.destroyed then return false end
+        if enabled and not self.supported then notice('error','Available in Natural Disaster Survival');return false end
+        if enabled==self.enabled then return self.enabled end
+        self.enabled=enabled
+        if enabled then start()
+        else stop();if ctx.dismiss then ctx.dismiss()end end
+        return self.enabled
+    end
+    function self:manual()
+        if self.destroyed or self.manualBusy or os.clock()<self.manualReadyAt then return false end
+        self.manualReadyAt=os.clock()+4
+        if not self.supported then notice('error','Error, You are not in an active round');return true end
+        self.manualBusy=true
+        local s=start();manualResult(s)
+        return true
+    end
+    function self:destroy()
+        if self.destroyed then return end
+        self.destroyed=true;self.enabled=false;stop()
+    end
+    return self
+end
+end)()
 -- END CHARACTER FEATURES
 
 -- Main executable integration.
@@ -2554,10 +3094,37 @@ function motion:clearCarry(root) if self.carriedRoot==root then self.carriedRoot
 local featureContext={player=player,players=Players,runService=RunService,newFeature=createCharacterFeature,motion=motion}
 features.walkOnWater=createWalkOnWater(featureContext)
 features.antifling=createAntifling(featureContext)
+features.disasterPrediction=createDisasterPrediction({player=player,playerGui=playerGui,gui=UI.gui,
+    storage=game:GetService("ReplicatedStorage"),runService=RunService,detection=DisasterDetection,
+    notify=function(kind,text)UI.disasterToast:show(kind,text)end,
+    dismiss=function()UI.disasterToast:dismiss(.20)end})
 UI.noFallToggle=FeatureToggle.new(UI.mainLeft,"NoFallDamage","No Fall Damage",features.noFallDamage)
 UI.waterToggle=FeatureToggle.new(UI.mainLeft,"WalkOnWater","Walk on Water",features.walkOnWater)
 UI.antiflingToggle=FeatureToggle.new(UI.mainLeft,"Antifling","Antifling",features.antifling)
-UI.featureToggles={UI.noFallToggle,UI.waterToggle,UI.antiflingToggle}
+UI.disasterToggle=FeatureToggle.new(UI.mainLeft,"DisasterPrediction","Disaster Prediction",features.disasterPrediction)
+UI.featureToggles={UI.noFallToggle,UI.waterToggle,UI.antiflingToggle,UI.disasterToggle}
+UI.disasterManual,UI.disasterManualFX=button(UI.mainLeft,"DisasterPredictionManual",UDim2.fromOffset(5,294),UDim2.fromOffset(272,52))
+UI.disasterManual.Active=true
+UI.disasterManualCaption=label(UI.disasterManual,"ManualCaption","Predict Disaster",UDim2.fromOffset(12,0),UDim2.new(1,-54,1,0),20,C.white,OPTION_FONT)
+UI.disasterManualCaption.TextWrapped=true;UI.disasterManualCaption.Active=false;UI.disasterManualCaption.ZIndex=4
+UI.disasterCooldown=label(UI.disasterManual,"ManualCooldown","",UDim2.new(1,-40,0,0),UDim2.fromOffset(30,52),18,C.cyan,OPTION_FONT)
+UI.disasterCooldown.Active=false;UI.disasterCooldown.ZIndex=4;UI.disasterCooldown.TextXAlignment=Enum.TextXAlignment.Center
+UI.disasterManual:SetAttribute("CooldownRemaining",0)
+local function updateDisasterManual()
+    local left=math.max(0,math.ceil(features.disasterPrediction.manualReadyAt-os.clock()))
+    if left~=UI.disasterManual:GetAttribute("CooldownRemaining") then
+        UI.disasterManual:SetAttribute("CooldownRemaining",left)
+        UI.disasterManual.Active=left==0;UI.disasterManual.Selectable=left==0
+        UI.disasterCooldown.Text=left>0 and (tostring(left).."s") or ""
+        UI.disasterManualCaption.TextColor3=left>0 and C.muted or C.white
+    end
+end
+connect(UI.disasterManual.Activated,function()
+    if state.target=="closed" then return end
+    if features.disasterPrediction:manual() then
+        updateDisasterManual();UI.disasterManualFX.scale.Scale=.977;tween(UI.disasterManualFX.scale,.22,{Scale=1})
+    end
+end)
 UI.gui:SetAttribute("NoFallDamageEnabled",false)
 UI.gui:SetAttribute("NoFallDamageSupported",features.noFallDamage.supported)
 UI.flyButton,UI.flyButtonFX=button(UI.mainRight,"FlySS3FE",UDim2.fromOffset(5,6),UDim2.fromOffset(272,60))
@@ -2676,6 +3243,7 @@ local function resize(initial)
     local v=UI.screen.AbsoluteSize
     if v.X<1 or v.Y<1 then return end
     UI.loadToast:resize()
+    UI.disasterToast:resize()
     layout.width=math.min(880,math.floor(v.X*(v.X<600 and .94 or .86)))
     layout.height=math.min(420,math.floor(v.Y*.82))
     layout.dockWidth=v.X<320 and 110 or (v.X<600 and 126 or 170)
@@ -2746,7 +3314,11 @@ local function resize(initial)
     for index,control in ipairs(UI.featureToggles) do
         control.button.Position=UDim2.fromOffset(5,6+(index-1)*(rowHeight+12))
     end
-    UI.mainColumns.Size=UDim2.fromOffset(mainWidth,math.max(#UI.featureToggles*(rowHeight+12)+6,h-headerH-64))
+    local manualY=6+#UI.featureToggles*(rowHeight+12)
+    UI.disasterManual.Position=UDim2.fromOffset(5,manualY)
+    UI.disasterManual.Size=UDim2.fromOffset(UI.noFallToggle.button.Size.X.Offset,52)
+    UI.disasterManualCaption.TextSize=columnWidth<248 and 18 or 20
+    UI.mainColumns.Size=UDim2.fromOffset(mainWidth,math.max(manualY+58,h-headerH-64))
     UI.mainLeft.Size=UDim2.new(0,columnWidth,1,0)
     UI.mainRight.Position=UDim2.fromOffset(columnWidth+24,0)
     UI.mainRight.Size=UDim2.new(0,columnWidth,1,0)
@@ -2842,7 +3414,9 @@ local function transition(target)
     UI.gui:SetAttribute("Minimized",target=="minimized")
     UI.gui:SetAttribute("Transition",target=="closed" and "closing" or target=="minimized" and "minimizing" or "opening")
     UI.recovery.Visible=false
-    if target=="closed" then UI.loadToast:dismiss(.22) end
+    if target=="closed" then
+        UI.loadToast:dismiss(.22);UI.disasterToast:dismiss(.22);features.disasterPrediction:destroy()
+    end
     if target=="open" then
         UI.window.Visible=true
         tween(UI.windowFade,.28,{Value=1});tween(UI.zoom,.32,{Value=1})
@@ -2993,6 +3567,7 @@ UI.gui:SetAttribute("Minimized",false)
 updateClock();refreshAlpha();transition("open");UI.loadToast:start()
 connect(RunService.Heartbeat,function(dt)
     updateClock()
+    updateDisasterManual()
     if state.finishAt>0 and os.clock()>=state.finishAt then
         state.finishAt=0
         if state.target=="closed" then UI.gui:Destroy();return end
@@ -3011,6 +3586,7 @@ connect(RunService.Heartbeat,function(dt)
     -- Notifications keep their own lifetime, including while the window or
     -- launcher is minimized, folded or dragged entirely off the screen.
     UI.loadToast:update(os.clock(),p)
+    UI.disasterToast:update(os.clock(),p)
     local pulse=.5+.5*math.sin(p*1.8)
     UI.recovery.Visible=state.target~="closed" and state.finishAt==0 and offscreen(state.target=="minimized" and UI.launcher or UI.window)
     if p>=(state.assetPoll or 0) then

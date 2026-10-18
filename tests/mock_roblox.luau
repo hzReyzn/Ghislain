@@ -88,7 +88,7 @@ local function newWorld()
     env.Random={new=function()return {NextNumber=function(_,a,b)return (a+b)/2 end,NextInteger=function(_,a,b)return math.floor((a+b)/2)end}end}
     env.OverlapParams={new=function()return {}end};env.RaycastParams={new=function()return {}end}
     local methods={}
-    local events={Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,DescendantAdded=true,DescendantRemoving=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,WindowFocused=true,JumpRequest=true}
+    local events={AttributeChanged=true,OnClientEvent=true,Ended=true,Loaded=true,TeleportInitFailed=true,Destroying=true,ChildAdded=true,ChildRemoved=true,DescendantAdded=true,DescendantRemoving=true,Changed=true,Activated=true,InputBegan=true,InputEnded=true,InputChanged=true,MouseEnter=true,MouseLeave=true,FocusLost=true,Died=true,StateChanged=true,CharacterAdded=true,CharacterRemoving=true,WindowFocusReleased=true,WindowFocused=true,JumpRequest=true}
     local guiClasses={Frame=true,CanvasGroup=true,TextLabel=true,TextButton=true,TextBox=true,ImageLabel=true,ImageButton=true,ScrollingFrame=true,VideoFrame=true}
     local mt={}
     mt.__index=function(t,k)
@@ -161,6 +161,7 @@ local function newWorld()
     end
     function methods:IsA(c)
         return c==self.ClassName or c=="Instance" or (c=="GuiObject" and guiClasses[self.ClassName])
+            or (c=="LuaSourceContainer" and (self.ClassName=="ModuleScript" or self.ClassName=="LocalScript" or self.ClassName=="Script"))
             or (c=="BasePart" and (self.ClassName=="Part" or self.ClassName=="Seat" or self.ClassName=="VehicleSeat" or self.ClassName=="MeshPart"))
             or (c=="DataModelMesh" and (self.ClassName=="BlockMesh" or self.ClassName=="SpecialMesh"))
             or (c=="Constraint" and (self.ClassName=="HingeConstraint" or self.ClassName=="BallSocketConstraint" or self.ClassName=="AlignOrientation" or self.ClassName=="LinearVelocity"))
@@ -180,10 +181,17 @@ local function newWorld()
     function methods:WaitForChild(n)return self:FindFirstChild(n)end
     function methods:FindFirstAncestorOfClass(c)local p=self.Parent;while p do if p:IsA(c)then return p end;p=p.Parent end end
     function methods:IsDescendantOf(a)local p=self.Parent;while p do if p==a then return true end;p=p.Parent end;return false end
-    function methods:GetFullName()return self.Name end
+    function methods:GetFullName()return self.Parent and self.Parent:GetFullName()..'.'..self.Name or self.Name end
     function methods:GetPropertyChangedSignal(k)if not self._signals[k]then self._signals[k]=signal()end;return self._signals[k]end
-    function methods:SetAttribute(k,v)local old=self._attributes[k];self._attributes[k]=v;if old~=v and self._signals['@'..k]then self._signals['@'..k]:Fire()end end
+    function methods:SetAttribute(k,v)
+        local old=self._attributes[k];self._attributes[k]=v
+        if old~=v then
+            if self._signals['@'..k]then self._signals['@'..k]:Fire()end
+            self.AttributeChanged:Fire(k)
+        end
+    end
     function methods:GetAttribute(k)return self._attributes[k]end
+    function methods:GetAttributes()return table.clone(self._attributes)end
     function methods:GetAttributeChangedSignal(k)return self:GetPropertyChangedSignal('@'..k)end
     function methods:ClearAllChildren()for _,c in ipairs(self:GetChildren())do c:Destroy()end end
     function methods:Destroy()

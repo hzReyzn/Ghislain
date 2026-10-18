@@ -24,7 +24,7 @@ Cerrar Reyzn X cancela sus descargas pendientes y evita un arranque tardío. Una
 
 ## Main: interruptores y ejecutables
 
-Main separa los controles en dos columnas: **No Fall Damage**, **Walk on Water** y **Antifling**, con **OFF / ON**, a la izquierda; el ejecutable **FLY SS3 FE** a la derecha. Entre ambos quedan un espacio libre y una línea con 88% de transparencia y extremos desvanecidos. No se agregan descripciones ni encabezados. Los controles mantienen el acabado metálico, Rajdhani y el neón del Hub; en pantallas estrechas el contenido permite desplazamiento horizontal para conservar botones legibles y táctiles, y vertical para alcanzar todas las filas.
+Main separa los controles en dos columnas: **No Fall Damage**, **Walk on Water**, **Antifling** y **Disaster Prediction**, con **OFF / ON**, a la izquierda; el ejecutable **FLY SS3 FE** a la derecha. **Predict Disaster** queda inmediatamente debajo de Disaster Prediction para consultar manualmente. Entre las columnas quedan un espacio libre y una línea con 88% de transparencia y extremos desvanecidos. No se agregan descripciones ni encabezados. Los controles mantienen el acabado metálico, Rajdhani y el neón del Hub; en pantallas estrechas el contenido permite desplazamiento horizontal para conservar botones legibles y táctiles, y vertical para alcanzar todas las filas.
 
 **No Fall Damage** empieza en OFF. El diseño apagado es carbón y gris; al activar aparecen el neón celeste/amatista, un destello breve y una compresión suave. Al apagar, el destello se cancela y el brillo se desvanece. La tarjeta mide hasta 340 × 60 px; en columnas estrechas acomoda el estado debajo del título, sin agrandar el Hub.
 
@@ -45,6 +45,20 @@ Ambos parten de los controladores de HzReyzn Hub. Comienzan **OFF**, conservan l
 Cada función tiene estado, generación de personaje, conexiones y objetos propios. El coordinador de velocidad permite leer la velocidad real entre el pulso y su restauración; una corrección de Antifling o del soporte de un vehículo no puede ser deshecha por una restauración anterior de No Fall Damage. La coordinación reconoce también una raíz soldada a la misma estructura rígida de un vehículo. Destruir un controlador no elimina los recursos de otro.
 
 Los módulos están en `runtime/CharacterFeature.luau`, `features/WalkOnWater.luau` y `features/Antifling.luau`. Después de modificarlos, ejecuta `python tools/build_features.py` para incluirlos en el archivo distribuido. No se descarga código remoto para activar las opciones.
+
+### Disaster Prediction
+
+El detector que funcionó por separado está integrado, sin abrir su monitor ni su ventana Report. Al ejecutar Reyzn X también se retira una instancia anterior llamada `ReyznDisasterPrediction`, si seguía abierta. El repositorio independiente conserva su código; el Hub incluye el controlador y no descarga ni ejecuta aquel GUI.
+
+- **Disaster Prediction** comienza **OFF**. ON escucha señales replicadas y muestra automáticamente los desastres reconocidos; OFF cancela sus observadores y el aviso activo. Conserva ON al reaparecer y vuelve a enlazarse al personaje nuevo. Se descartan los datos de su personaje anterior.
+- **Predict Disaster** realiza una consulta manual incluso con el automático en OFF. En ese caso, sus observadores son temporales y se retiran al completar la lectura. Tiene un **cooldown de 4 segundos** desde el clic aceptado, muestra los segundos restantes y rechaza clics repetidos. Los errores también consumen ese cooldown.
+- La consulta comprueba un personaje vivo fuera del vacío y señales locales de participación: `SurvivalTag` válido o indicadores explícitos `InRound`, `InActiveRound`, `ParticipatingInRound` o `PlayingRound`. Un desastre global por sí solo no demuestra que el jugador participe. Muerte, retirada del personaje, intermisión o participación falsa muestran exactamente **Error, You are not in an active round**. Si hay participación confirmada pero todavía no hay datos del desastre, muestra **Disaster data is not available yet**.
+- El aviso aparece en la **esquina superior derecha del área segura**. Entra desde la derecha durante 0,36 s, con transparencia progresiva; permanece visible **3 segundos** y sale por la derecha durante 0,32 s. Usa obsidiana, Rajdhani, bordes metálicos, neón celeste/amatista con movimiento, un brillo exterior suave y una barra de duración. Se adapta a cambios de orientación y no captura toques.
+- Se reutiliza una sola tarjeta. Los desastres múltiples se agrupan y una nueva notificación sustituye la anterior sin acumular ventanas. El aviso tiene un reloj independiente del panel: funciona al minimizar, plegar o arrastrar el Hub fuera de la pantalla. Cerrar Reyzn X cancela la consulta, desconecta el detector y desvanece el aviso.
+
+Conserva el reconocimiento de los 13 nombres de la captura, los valores/atributos de estado, los eventos recibidos y el aviso visible como alternativa. Excluye catálogos, módulos estáticos, chat y sus propias interfaces. No modifica velocidad, colisiones, salud ni las funciones de movimiento. La anticipación sigue dependiendo de cuándo el servidor replique el dato: no inventa un desastre futuro a partir de una lista de módulos.
+
+`runtime/DisasterDetection.luau` y `features/DisasterPrediction.luau` se incluyen mediante `python tools/build_features.py`. El detector se limita a 192 fuentes, 48 eventos, 48 etiquetas de aviso y 192 candidatos de texto; no recorre el mundo por fotograma. La notificación utiliza el compositor de transparencia y el Heartbeat visual ya existentes.
 
 ### FLY SS3 FE
 
@@ -99,7 +113,7 @@ Los iconos conservan sus colores, se ajustan proporcionalmente y usan `ImageTran
 
 ## Funciones conservadas
 
-- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling y FLY SS3 FE. Scripts contiene Telekinesis UI y Super Black Hole; Visuals y Settings siguen vacías para el trabajo posterior.
+- Home, Main, Visuals, Scripts y Settings mantienen sus nombres y funciones en el menú lateral. Main contiene No Fall Damage, Walk on Water, Antifling, Disaster Prediction con consulta manual y FLY SS3 FE. Scripts contiene Telekinesis UI y Super Black Hole; Visuals y Settings siguen vacías para el trabajo posterior.
 - Cada sección se despliega a la derecha. Pulsar la misma opción o el control de plegado deja visible solo el menú.
 - Arrastre libre con ratón o toque, también en el logo R minimizado. Es posible sacar la interfaz de la pantalla y recuperarla mediante la R auxiliar o RightShift.
 - Avatar circular del usuario, UserId y contador desde cero por ejecución, independiente de minimizar, plegar o reaparecer.
@@ -131,6 +145,8 @@ También ejecuta **15 escenarios de integración** con el código completo de am
 
 Los **25 escenarios de funciones del personaje** cubren los tres interruptores, alturas de agua y mallas, cambios de ronda, saltos y suelo, límites y reutilización de restricciones, correcciones de velocidad durante pulsos pendientes, vuelo simultáneo a 5000, muerte/reset/vacío, personajes incompletos, callbacks obsoletos, plataformas y restricciones eliminadas, vehículos compartidos o con nuevos ocupantes, limpieza y reejecución. El controlador FLY tiene **28 pruebas** en su repositorio, incluidas desactivación al caer al vacío y retirada del personaje completo.
 
-Los **8 escenarios de ejecutables** verifican los nombres/enlaces, tamaños táctiles, ausencia de ejecución automática, cargas independientes, clics repetidos, reintentos, fallos de red/compilación/arranque, cierre durante una descarga y conservación de un script externo ya iniciado. También se fija el contenido exacto de `Loader.lua`. Son **90 escenarios en Ghislain** y 28 en FLY: **118 en total**.
+Los **8 escenarios de ejecutables** verifican los nombres/enlaces, tamaños táctiles, ausencia de ejecución automática, cargas independientes, clics repetidos, reintentos, fallos de red/compilación/arranque, cierre durante una descarga y conservación de un script externo ya iniciado. También se fija el contenido exacto de `Loader.lua`.
+
+Los **25 escenarios de Disaster Prediction** comprueban OFF inicial, distribución y consulta manual, sustitución del GUI anterior, fuentes y duplicados, descarte de catálogos/chat, participación local, intermisión, muerte/reset/vacío, cooldown, duración y dirección del aviso, cambios de orientación, minimización, interrupción y sustitución de avisos, consultas canceladas, limpieza, reejecución y compatibilidad con los cuatro controladores existentes. Son **115 escenarios en Ghislain**. FLY conserva además sus 28 pruebas independientes.
 
 Las pruebas simulan el cliente. Ninguna sustituye el renderizado, la medición de FPS ni una caída real en Roblox/Android.

@@ -12,7 +12,9 @@ assert "local function runFlySSJ3()\n" + fly + "end\n" in source, "Rebuild bundl
 coordinator = fly.split("-- BEGIN NO FALL COORDINATOR\n", 1)[1].split("-- END NO FALL COORDINATOR\n", 1)[0]
 assert source.split("-- BEGIN NO FALL COORDINATOR\n", 1)[1].split("-- END NO FALL COORDINATOR\n", 1)[0] == coordinator
 for path,name in [('runtime/CharacterFeature.luau','createCharacterFeature'),
-                  ('features/WalkOnWater.luau','createWalkOnWater'),('features/Antifling.luau','createAntifling')]:
+                  ('features/WalkOnWater.luau','createWalkOnWater'),('features/Antifling.luau','createAntifling'),
+                  ('runtime/DisasterDetection.luau','DisasterDetection'),
+                  ('features/DisasterPrediction.luau','createDisasterPrediction')]:
     assert 'local '+name+' = (function()\n'+(ROOT/path).read_text()+'end)()' in source, 'Rebuild character features'
 compiler = LUAU.with_name("luau-compile")
 if compiler.is_file():
@@ -44,7 +46,7 @@ for name, size, properties in assets:
         assert body[:8] == b'\x89PNG\r\n\x1a\n' and body[12:16] == b'IHDR' and body[-8:-4] == b'IEND', name
 generated = ROOT / "tests" / "_generated.luau"
 try:
-    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\nrequire('./character_features')(source,fly)\nrequire('./executables')(source)\n")
+    generated.write_text("local source=[====[" + source + "]====]\nlocal fly=[====[" + fly + "]====]\nrequire('./behavior')(source)\nrequire('./integration')(source,fly)\nrequire('./character_features')(source,fly)\nrequire('./executables')(source)\nrequire('./disaster_prediction')(source)\n")
     subprocess.run([str(LUAU), str(generated)], check=True)
 finally:
     generated.unlink(missing_ok=True)
