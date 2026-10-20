@@ -3503,6 +3503,7 @@ local function addScriptExecutable(name,title,url)
 end
 addScriptExecutable("TelekinesisUI","Telekinesis UI","https://scriptblox.com/raw/Universal-Script-Telekinesis-Ui-95037")
 addScriptExecutable("SuperBlackHole","Super Black Hole","https://scriptblox.com/raw/Natural-Disaster-Survival-Ultra-Blackhole-and-Super-ring-no-lying-Full-FE+Keyless-228862")
+addScriptExecutable("KevinDropKick","Kevin DropKick","https://raw.githubusercontent.com/WithKevinDev/Kevin-Hub-DropKicker/refs/heads/main/main.lua")
 -- END REQUESTED REMOTE EXECUTABLES
 
 -- Put the existing labels/icons inside the press surface, while the original
