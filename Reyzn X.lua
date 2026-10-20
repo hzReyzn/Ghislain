@@ -1,5 +1,5 @@
 -- Reyzn X | Made By Reyzn
--- Client GUI, opt-in features and two explicitly requested external launchers.
+-- Client GUI, opt-in features and explicitly requested external launchers.
 -- External code is fetched only when its own Scripts button is pressed.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
@@ -731,7 +731,7 @@ for _,name in ipairs({"Home","Main","Visuals","Scripts","Settings"}) do
         ClipsDescendants=true,ScrollingDirection=Enum.ScrollingDirection.Y,AutomaticCanvasSize=Enum.AutomaticSize.None,Visible=name=="Home"},"page")
     pages[name]=page
 end
--- Main contains opt-in features; the other three work pages remain empty.
+-- Main contains opt-in features; Visuals has one-click controls.
 -- Visual quality is always Ultra High.
 UI.hero=frame(pages.Home,"Hero",UDim2.fromOffset(1,1),UDim2.new(1,-8,0,200),Color3.new(1,1,1))
 corner(UI.hero,13)
@@ -3272,6 +3272,239 @@ return function(context)
 end
 end)()
 -- END CHARACTER FEATURES
+-- EXPERIMENTAL MAIN: Anti-Void & Anti-Tsunami V3 (both OFF by default).
+local function nDSController(controller,name)
+    local originalSet=controller.setEnabled
+    function controller:setEnabled(value)
+        if value and game.PlaceId~=189707 then
+            warn("Reyzn X: "..name.." requires Natural Disaster Survival.")
+            return false
+        end
+        return originalSet(self,value)
+    end
+    return controller
+end
+
+local function createAntiVoid(context)
+    local locations={
+        {name="Island",pos=Vector3.new(-127.3518295288086,47.61382293701172,8.868382453918457)},
+        {name="Tower",pos=Vector3.new(-236.30526733398438,194.6138153076172,337.5936584472656)}
+    }
+    local elapsed=0
+    local lastRescue=-math.huge
+    local spawnAt=os.clock()
+    local rp=RaycastParams.new()
+    rp.FilterType=Enum.RaycastFilterType.Exclude
+    rp.IgnoreWater=true
+    rp.RespectCanCollide=true
+    local controller=context.newFeature(context.player,context.runService,{
+        start=function()
+            local env=(type(getgenv)=="function" and getgenv()) or _G
+            if typeof(env.ReyznAntiVoidConnection)=="RBXScriptConnection" then
+                env.ReyznAntiVoidConnection:Disconnect()
+                env.ReyznAntiVoidConnection=nil
+            end
+        end,
+        reset=function()
+            elapsed=0
+            spawnAt=os.clock()
+        end,
+        step=function(self,dt)
+            elapsed+=dt
+            if elapsed<.1 then return end
+            elapsed=0
+            local char,root,hum=self.character,self.root,self.humanoid
+            if not root or root.Anchored or hum.SeatPart then return end
+            local now=os.clock()
+            if now-spawnAt<2 or now-lastRescue<2 then return end
+            if root.Position.Y>math.max(18,workspace.FallenPartsDestroyHeight+35) then return end
+            if root.AssemblyLinearVelocity.Y>-12 then return end
+            rp.FilterDescendantsInstances={char}
+            if workspace:Raycast(root.Position,Vector3.new(0,-400,0),rp) then return end
+            local choice,shortest
+            for _,destination in ipairs(locations) do
+                local offset=destination.pos-root.Position
+                local length=offset.X*offset.X+offset.Z*offset.Z
+                if not shortest or length<shortest then
+                    shortest=length;choice=destination
+                end
+            end
+            if not choice then return end
+            lastRescue=now
+            context.motion:writeVelocity(root,Vector3.zero)
+            root.AssemblyAngularVelocity=Vector3.zero
+            root.CFrame=CFrame.new(choice.pos)*root.CFrame.Rotation
+            context.motion:markCarry(root)
+            warn("Reyzn X Anti-Void: rescue to "..choice.name)
+        end
+    })
+    return nDSController(controller,"Anti-Void")
+end
+
+local function createAntiTsunami(context)
+    -- Values verified in the standalone V3 test.
+    local RADIUS,DURATION,RATE=10,8,.1
+    local RISE_SPEED,FALL_SPEED=50,50
+    local elapsed=0
+    local phase="idle"
+    local trackedWave,previousCenter,previousTime,usedWave
+    local lockedPosition,hoverHeight,landPosition,detectAt
+    local attachment,align
+    local function clearForce()
+        if align then align:Destroy();align=nil end
+        if attachment then attachment:Destroy();attachment=nil end
+    end
+    local function resetFloat(keepWave)
+        clearForce()
+        phase="idle"
+        lockedPosition,hoverHeight,landPosition,detectAt=nil,nil,nil,nil
+        if not keepWave then usedWave=nil end
+    end
+    local function findWave()
+        local structure=workspace:FindFirstChild("Structure")
+        return structure and structure:FindFirstChild("TsunamiWave",true)
+    end
+    local function inspectWave(position,wave)
+        local closest,highest=math.huge,-math.huge
+        local sum,count=Vector3.zero,0
+        local function scan(part)
+            local cf,half=part.CFrame,part.Size*.5
+            local r,u,l=cf.RightVector,cf.UpVector,cf.LookVector
+            local ex=math.abs(r.X)*half.X+math.abs(u.X)*half.Y+math.abs(l.X)*half.Z
+            local ey=math.abs(r.Y)*half.X+math.abs(u.Y)*half.Y+math.abs(l.Y)*half.Z
+            local ez=math.abs(r.Z)*half.X+math.abs(u.Z)*half.Y+math.abs(l.Z)*half.Z
+            local pos=part.Position
+            local dx=math.max(math.abs(position.X-pos.X)-ex,0)
+            local dz=math.max(math.abs(position.Z-pos.Z)-ez,0)
+            closest=math.min(closest,math.sqrt(dx*dx+dz*dz))
+            highest=math.max(highest,pos.Y+ey)
+            sum+=pos;count+=1
+        end
+        if wave:IsA("BasePart") then scan(wave)
+        else
+            for _,part in ipairs(wave:GetDescendants()) do
+                if part:IsA("BasePart") then scan(part) end
+            end
+        end
+        if count==0 then return math.huge,-math.huge,nil end
+        return closest,highest,sum/count
+    end
+    local function movingCloser(wave,center,ref,now)
+        if not wave or not center then
+            trackedWave,previousCenter,previousTime=nil,nil,nil
+            return false
+        end
+        if trackedWave~=wave then
+            trackedWave,previousCenter,previousTime=wave,center,now
+            return false
+        end
+        local approach=false
+        if previousCenter and previousTime then
+            local dt=math.max(now-previousTime,.001)
+            local delta=Vector3.new(center.X-previousCenter.X,0,center.Z-previousCenter.Z)
+            local radial=Vector3.new(center.X-ref.X,0,center.Z-ref.Z)
+            if radial.Magnitude>1 then
+                approach=delta:Dot(radial.Unit)/dt < -1.5
+            end
+        end
+        previousCenter,previousTime=center,now
+        return approach
+    end
+    local function startFloat(root,wave,waveTop,now)
+        lockedPosition=root.Position
+        local rise=math.clamp(math.max(55,waveTop+20-lockedPosition.Y),55,140)
+        hoverHeight=lockedPosition.Y+rise
+        detectAt=now
+        usedWave=wave
+        root.AssemblyLinearVelocity=Vector3.zero
+        root.AssemblyAngularVelocity=Vector3.zero
+        clearForce()
+        attachment=Instance.new("Attachment")
+        attachment.Name="ReyznTsunamiAttachment"
+        attachment.Parent=root
+        align=Instance.new("AlignPosition")
+        align.Name="ReyznTsunamiFloat"
+        align.Mode=Enum.PositionAlignmentMode.OneAttachment
+        align.Attachment0=attachment
+        align.ApplyAtCenterOfMass=true
+        align.MaxForce=1000000
+        align.MaxVelocity=RISE_SPEED
+        align.Responsiveness=40
+        align.RigidityEnabled=false
+        align.Position=Vector3.new(lockedPosition.X,hoverHeight,lockedPosition.Z)
+        align.Parent=root
+        phase="floating"
+    end
+    local function safeLanding(character,humanoid,root,wave)
+        local exclusions={character}
+        if wave then exclusions[#exclusions+1]=wave end
+        local params=RaycastParams.new()
+        params.FilterType=Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances=exclusions
+        params.IgnoreWater=true
+        params.RespectCanCollide=true
+        local ray=workspace:Raycast(
+            Vector3.new(lockedPosition.X,root.Position.Y,lockedPosition.Z),
+            Vector3.new(0,-500,0),params
+        )
+        if not ray or ray.Normal.Y<.65 then return nil end
+        local y=ray.Position.Y+humanoid.HipHeight+root.Size.Y*.5+.3
+        if y<workspace.FallenPartsDestroyHeight+15 then return nil end
+        return Vector3.new(lockedPosition.X,y,lockedPosition.Z)
+    end
+    local controller=context.newFeature(context.player,context.runService,{
+        start=function()
+            local env=(type(getgenv)=="function" and getgenv()) or _G
+            if type(env.ReyznTsunamiFloatStop)=="function" then
+                pcall(env.ReyznTsunamiFloatStop)
+            end
+        end,
+        reset=function()
+            elapsed=0
+            resetFloat(false)
+            trackedWave,previousCenter,previousTime=nil,nil,nil
+        end,
+        step=function(self,dt)
+            elapsed+=dt
+            if elapsed<RATE then return end
+            elapsed=0
+            local char,root,hum=self.character,self.root,self.humanoid
+            if root.Anchored or hum.SeatPart then resetFloat(false);return end
+            local now=os.clock()
+            local wave=findWave()
+            if not wave then usedWave=nil end
+            local distance,top,center=math.huge,-math.huge,nil
+            if wave then distance,top,center=inspectWave(root.Position,wave) end
+            local approaching=movingCloser(wave,center,lockedPosition or root.Position,now)
+            if phase=="idle" then
+                if wave and wave~=usedWave and distance<=RADIUS and approaching then
+                    startFloat(root,wave,top,now)
+                end
+                return
+            end
+            if not align or not lockedPosition then resetFloat(false);return end
+            if phase=="floating" then
+                -- Descend 8 seconds after first detection, not after wave departure.
+                if now-detectAt<DURATION then return end
+                local destination=safeLanding(char,hum,root,wave)
+                if not destination then return end
+                landPosition=destination
+                phase="descending"
+                align.MaxVelocity=FALL_SPEED
+                align.Position=destination
+                return
+            end
+            if phase=="descending" and landPosition then
+                if (root.Position-landPosition).Magnitude<=2.5 then
+                    root.AssemblyLinearVelocity=Vector3.zero
+                    resetFloat(true)
+                end
+            end
+        end
+    })
+    return nDSController(controller,"Anti-Tsunami")
+end
+-- END EXPERIMENTAL MAIN FEATURES
 
 -- Main executable integration.
 UI.mainColumns=frame(pages.Main,"MainColumns",UDim2.fromOffset(0,0),UDim2.fromOffset(600,120),nil,1)
@@ -3296,6 +3529,8 @@ function motion:clearCarry(root) if self.carriedRoot==root then self.carriedRoot
 local featureContext={player=player,players=Players,runService=RunService,newFeature=createCharacterFeature,motion=motion}
 features.walkOnWater=createWalkOnWater(featureContext)
 features.antifling=createAntifling(featureContext)
+features.antiTsunami=createAntiTsunami(featureContext)
+features.antiVoid=createAntiVoid(featureContext)
 features.disasterPrediction=createDisasterPrediction({player=player,playerGui=playerGui,gui=UI.gui,
     storage=game:GetService("ReplicatedStorage"),runService=RunService,detection=DisasterDetection,
     notify=function(kind,text)UI.disasterToast:show(kind,text)end,
@@ -3304,7 +3539,9 @@ UI.noFallToggle=FeatureToggle.new(UI.mainLeft,"NoFallDamage","No Fall Damage",fe
 UI.waterToggle=FeatureToggle.new(UI.mainLeft,"WalkOnWater","Walk on Water",features.walkOnWater)
 UI.antiflingToggle=FeatureToggle.new(UI.mainLeft,"Antifling","Antifling",features.antifling)
 UI.disasterToggle=FeatureToggle.new(UI.mainLeft,"DisasterPrediction","Disaster Prediction",features.disasterPrediction)
-UI.featureToggles={UI.noFallToggle,UI.waterToggle,UI.antiflingToggle,UI.disasterToggle}
+UI.tsunamiToggle=FeatureToggle.new(UI.mainLeft,"AntiTsunami","Anti-Tsunami",features.antiTsunami)
+UI.voidToggle=FeatureToggle.new(UI.mainLeft,"AntiVoid","Anti-Void",features.antiVoid)
+UI.featureToggles={UI.noFallToggle,UI.waterToggle,UI.antiflingToggle,UI.disasterToggle,UI.tsunamiToggle,UI.voidToggle}
 UI.disasterManual,UI.disasterManualFX=button(UI.mainLeft,"DisasterPredictionManual",UDim2.fromOffset(5,294),UDim2.fromOffset(272,52))
 UI.disasterManual.Active=true
 UI.disasterManualCaption=label(UI.disasterManual,"ManualCaption","Predict Disaster",UDim2.fromOffset(12,0),UDim2.new(1,-54,1,0),20,C.white,OPTION_FONT)
@@ -3577,6 +3814,77 @@ addScriptExecutable("TelekinesisUI","Telekinesis UI","https://scriptblox.com/raw
 addScriptExecutable("SuperBlackHole","Super Black Hole","https://scriptblox.com/raw/Natural-Disaster-Survival-Ultra-Blackhole-and-Super-ring-no-lying-Full-FE+Keyless-228862")
 addScriptExecutable("KevinDropKick","Kevin DropKick","https://raw.githubusercontent.com/WithKevinDev/Kevin-Hub-DropKicker/refs/heads/main/main.lua")
 -- END REQUESTED REMOTE EXECUTABLES
+-- EXPERIMENTAL VISUALS: one-click executables in the left column.
+UI.visualColumns=frame(pages.Visuals,"VisualColumns",UDim2.fromOffset(0,0),UDim2.fromOffset(600,160),nil,1)
+UI.visualLeft=frame(UI.visualColumns,"VisualLeft",UDim2.fromOffset(0,0),UDim2.fromOffset(288,160),nil,1)
+UI.visualActions={}
+
+local stormTargets={sandstormgui=true,blizzardgui=true}
+local stormEnvironment=(type(getgenv)=="function" and getgenv()) or _G
+local function removeStormGui(object)
+    if object:IsA("ScreenGui") and stormTargets[object.Name:lower()] then
+        object:Destroy()
+    end
+end
+local function startStormCleaner()
+    local previous=stormEnvironment.ReyznStormEffectsCleaner
+    if not (type(previous)=="table" and typeof(previous.connection)=="RBXScriptConnection"
+        and previous.connection.Connected and previous.playerGui==playerGui) then
+        if type(previous)=="table" and typeof(previous.connection)=="RBXScriptConnection" then
+            previous.connection:Disconnect()
+        end
+        local listener=playerGui.DescendantAdded:Connect(function(object)
+            task.defer(function()
+                if object.Parent then removeStormGui(object) end
+            end)
+        end)
+        stormEnvironment.ReyznStormEffectsCleaner={connection=listener,playerGui=playerGui}
+    end
+    for _,object in ipairs(playerGui:GetDescendants()) do removeStormGui(object) end
+end
+local removeStormAction=actionButton(UI.visualLeft,"RemoveStormEffectsUI","Remove StormEffects UI",function(b)
+    local ok,err=pcall(startStormCleaner)
+    if not ok then warn("Reyzn X: Remove StormEffects UI failed: "..tostring(err)) end
+    b:SetAttribute("ExecutableState",ok and "ready" or "error")
+end)
+UI.visualActions[#UI.visualActions+1]=removeStormAction
+
+local vehicleCamURL="https://scriptblox.com/raw/Universal-Script-disable-vehicle-camera-58624"
+local vehicleCamBusy=false
+local vehicleCamNextClick=0
+local vehicleCamAction=actionButton(UI.visualLeft,"DisableVehicleCam","Disable Vehicle Cam",function(b)
+    if vehicleCamBusy or os.clock()<vehicleCamNextClick then return end
+    vehicleCamBusy=true
+    vehicleCamNextClick=os.clock()+.65
+    b:SetAttribute("ExecutableState","loading")
+    spawn(function()
+        local ok,chunk=pcall(function()
+            if type(loadstring)~="function" then error("loadstring is unavailable",0) end
+            local body=game:HttpGet(vehicleCamURL)
+            if type(body)~="string" or body:match("^%s*$") then error("empty script response",0) end
+            local compiled,compileError=loadstring(body)
+            if type(compiled)~="function" then error(compileError or "script could not compile",0) end
+            return compiled
+        end)
+        if not ok then
+            vehicleCamBusy=false
+            warn("Reyzn X: Disable Vehicle Cam could not load: "..tostring(chunk))
+            if state.alive and state.target~="closed" then b:SetAttribute("ExecutableState","error") end
+            return
+        end
+        if state.alive and state.target~="closed" then b:SetAttribute("ExecutableState","running") end
+        task.spawn(function()
+            local started,err=pcall(chunk)
+            vehicleCamBusy=false
+            if not started then warn("Reyzn X: Disable Vehicle Cam failed: "..tostring(err)) end
+            if state.alive and state.target~="closed" then
+                b:SetAttribute("ExecutableState",started and "ready" or "error")
+            end
+        end)
+    end)
+end)
+UI.visualActions[#UI.visualActions+1]=vehicleCamAction
+-- END EXPERIMENTAL VISUALS
 
 -- Put the existing labels/icons inside the press surface, while the original
 -- TextButton's touch/click rectangle remains stationary and full-sized.
@@ -3707,6 +4015,17 @@ local function resize(initial)
     end
     pages.Main.ScrollingDirection=Enum.ScrollingDirection.XY
     pages.Main.CanvasSize=UDim2.fromOffset(cw-5<mainWidth and mainWidth+5 or 0,UI.mainColumns.Size.Y.Offset)
+    -- Visuals: two one-click buttons in the left-hand column.
+    local visualHeight=6+#UI.visualActions*(rowHeight+12)+6
+    UI.visualColumns.Size=UDim2.fromOffset(mainWidth,math.max(visualHeight,h-headerH-64))
+    UI.visualLeft.Size=UDim2.new(0,columnWidth,1,0)
+    for index,action in ipairs(UI.visualActions) do
+        action.button.Position=UDim2.fromOffset(5,6+(index-1)*(rowHeight+12))
+        action.button.Size=UI.flyButton.Size
+        action.caption.TextSize=UI.flyCaption.TextSize
+    end
+    pages.Visuals.ScrollingDirection=Enum.ScrollingDirection.XY
+    pages.Visuals.CanvasSize=UDim2.fromOffset(cw-5<mainWidth and mainWidth+5 or 0,UI.visualColumns.Size.Y.Offset)
     local scriptWidth=math.max(140,math.min(340,cw-16))
     local scriptHeight=#UI.scriptExecutables*74+6
     UI.scriptList.Size=UDim2.fromOffset(scriptWidth+10,scriptHeight)
@@ -3805,6 +4124,7 @@ local function transition(target)
     UI.recovery.Visible=false
     if target=="closed" then
         UI.loadToast:dismiss(.22);UI.disasterToast:dismiss(.22);features.disasterPrediction:destroy()
+        features.antiTsunami:destroy();features.antiVoid:destroy()
         features.serverTravel:destroy();features.fpsCounter:destroy()
     end
     if target=="open" then
@@ -3819,6 +4139,11 @@ local function transition(target)
 end
 connect(UI.Minimize.Activated,function() transition("minimized") end)
 connect(UI.Close.Activated,function() transition("closed") end)
+-- GUI replacement immediately releases all motion constraints owned by these features.
+connect(UI.gui.Destroying,function()
+    features.antiTsunami:destroy()
+    features.antiVoid:destroy()
+end)
 connect(UI.launcher.Activated,function()
     if state.suppressLauncherUntil and os.clock()<state.suppressLauncherUntil then return end
     if offscreen(UI.window) then recenter() end
