@@ -3437,6 +3437,42 @@ local vehicleFlyAction=actionButton(UI.mainRight,"VehicleFLY","Vehicle FLY",func
 end)
 UI.mainActions[#UI.mainActions+1]=vehicleFlyAction
 
+-- Launch Rocket: one-click Main executable, matching Launch Rocket chrome and VFX.
+-- Uses the existing Lunch Rocket file without modifying it.
+local launchRocketURL="https://raw.githubusercontent.com/hzReyzn/Experimental/main/Lunch%20Rocket"
+local launchRocketBusy=false
+local launchRocketNextClick=0
+local launchRocketAction=actionButton(UI.mainRight,"LaunchRocket","Launch Rocket",function(b)
+    if launchRocketBusy or os.clock()<launchRocketNextClick then return end
+    launchRocketBusy=true
+    launchRocketNextClick=os.clock()+.65
+    b:SetAttribute("ExecutableState","loading")
+    spawn(function()
+        local ok,chunk=pcall(function()
+            if type(loadstring)~="function" then error("loadstring is unavailable",0) end
+            local body=game:HttpGet(launchRocketURL)
+            if type(body)~="string" or body:match("^%s*$") then error("empty script response",0) end
+            local compiled,compileError=loadstring(body)
+            if type(compiled)~="function" then error(compileError or "script could not compile",0) end
+            return compiled
+        end)
+        if not ok then
+            launchRocketBusy=false
+            warn("Reyzn X: Launch Rocket could not load: "..tostring(chunk))
+            if state.alive then b:SetAttribute("ExecutableState","error") end
+            return
+        end
+        if state.alive then b:SetAttribute("ExecutableState","running") end
+        task.spawn(function()
+            local started,err=pcall(chunk)
+            launchRocketBusy=false
+            if not started then warn("Reyzn X: Launch Rocket could not start: "..tostring(err)) end
+            if state.alive then b:SetAttribute("ExecutableState",started and "ready" or "error") end
+        end)
+    end)
+end)
+UI.mainActions[#UI.mainActions+1]=launchRocketAction
+
 -- Screen-owned FPS panel: the original PNG is unchanged; only live numbers
 -- are overlaid inside its empty window. It stays independent of the character.
 UI.fpsProgress=make("NumberValue",UI.gui,{Name="FPSOpacity",Value=0})
@@ -3655,7 +3691,9 @@ local function resize(initial)
     UI.disasterManual.Position=UDim2.fromOffset(5,manualY)
     UI.disasterManual.Size=UDim2.fromOffset(UI.noFallToggle.button.Size.X.Offset,52)
     UI.disasterManualCaption.TextSize=columnWidth<248 and 18 or 20
-    UI.mainColumns.Size=UDim2.fromOffset(mainWidth,math.max(manualY+58,h-headerH-64))
+    -- Fit every right-hand executable, including Launch Rocket, on narrow screens.
+    local rightActionsBottom=6+#UI.mainActions*(rowHeight+12)+rowHeight+6
+    UI.mainColumns.Size=UDim2.fromOffset(mainWidth,math.max(manualY+58,rightActionsBottom,h-headerH-64))
     UI.mainLeft.Size=UDim2.new(0,columnWidth,1,0)
     UI.mainRight.Position=UDim2.fromOffset(columnWidth+24,0)
     UI.mainRight.Size=UDim2.new(0,columnWidth,1,0)
