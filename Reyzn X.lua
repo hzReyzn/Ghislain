@@ -3401,6 +3401,42 @@ for _,data in ipairs({
     action.button:SetAttribute("Destination",destination);UI.mainActions[#UI.mainActions+1]=action
 end
 
+-- Vehicle FLY: one-click external launcher in Main's right-hand executable column.
+-- This only starts the supplied external script; no feature toggle or script edits.
+local vehicleFlyURL="https://raw.githubusercontent.com/hzReyzn/Obsfucated/refs/heads/main/VFLY%20OBSFUCATED.LUA.txt"
+local vehicleFlyBusy=false
+local vehicleFlyNextClick=0
+local vehicleFlyAction=actionButton(UI.mainRight,"VehicleFLY","Vehicle FLY",function(b)
+    if vehicleFlyBusy or os.clock()<vehicleFlyNextClick then return end
+    vehicleFlyBusy=true
+    vehicleFlyNextClick=os.clock()+.65
+    b:SetAttribute("ExecutableState","loading")
+    spawn(function()
+        local ok,chunk=pcall(function()
+            if type(loadstring)~="function" then error("loadstring is unavailable",0) end
+            local body=game:HttpGet(vehicleFlyURL)
+            if type(body)~="string" or body:match("^%s*$") then error("empty script response",0) end
+            local compiled,compileError=loadstring(body)
+            if type(compiled)~="function" then error(compileError or "script could not compile",0) end
+            return compiled
+        end)
+        if not ok then
+            vehicleFlyBusy=false
+            warn("Reyzn X: Vehicle FLY could not load: "..tostring(chunk))
+            if state.alive then b:SetAttribute("ExecutableState","error") end
+            return
+        end
+        if state.alive then b:SetAttribute("ExecutableState","running") end
+        task.spawn(function()
+            local started,err=pcall(chunk)
+            vehicleFlyBusy=false
+            if not started then warn("Reyzn X: Vehicle FLY could not start: "..tostring(err)) end
+            if state.alive then b:SetAttribute("ExecutableState",started and "ready" or "error") end
+        end)
+    end)
+end)
+UI.mainActions[#UI.mainActions+1]=vehicleFlyAction
+
 -- Screen-owned FPS panel: the original PNG is unchanged; only live numbers
 -- are overlaid inside its empty window. It stays independent of the character.
 UI.fpsProgress=make("NumberValue",UI.gui,{Name="FPSOpacity",Value=0})
